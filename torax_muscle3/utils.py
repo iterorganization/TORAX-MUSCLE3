@@ -7,18 +7,19 @@ from typing import Optional
 
 from imas import DBEntry
 from libmuscle import Instance
-from torax._src.config.build_runtime_params import RuntimeParamsProvider
-from torax._src.config.build_runtime_params import get_consistent_runtime_params_and_geometry
+from torax._src.config.build_runtime_params import (
+    RuntimeParamsProvider,
+    get_consistent_runtime_params_and_geometry,
+)
 from torax._src.config.config_loader import build_torax_config_from_file
 from torax._src.geometry.geometry_provider import GeometryProvider
+from torax._src.imas_tools.output.equilibrium import torax_state_to_imas_equilibrium
 from torax._src.orchestration import initial_state as initial_state_lib
 from torax._src.orchestration import sim_state
 from torax._src.orchestration.run_simulation import prepare_simulation
 from torax._src.orchestration.step_function import SimulationStepFn
-from torax._src.imas_tools.output.equilibrium import torax_state_to_imas_equilibrium
 from torax._src.state import SimError
-from ymmsl import Operator
-from ymmsl import SettingValue
+from ymmsl import Operator, SettingValue
 
 logger = logging.getLogger()
 
@@ -26,18 +27,15 @@ logger = logging.getLogger()
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
-from imas import DBEntry
-from imas import IDSFactory
+import numpy as np
+from imas import DBEntry, IDSFactory
 from imas.ids_defs import CLOSEST_INTERP
 from imas.ids_toplevel import IDSToplevel
-from libmuscle import Instance
-from libmuscle import Message
-import numpy as np
+from libmuscle import Instance, Message
 from torax._src.geometry import geometry
 from torax._src.geometry.geometry_provider import GeometryProvider
-from torax._src.geometry.pydantic_model import Geometry
-from torax._src.geometry.pydantic_model import GeometryConfig
 from torax._src.geometry.imas import IMASConfig
+from torax._src.geometry.pydantic_model import Geometry, GeometryConfig
 from torax._src.orchestration import sim_state
 from torax._src.torax_pydantic import model_config
 
@@ -113,11 +111,11 @@ def get_setting_optional(
 
 
 def merge_extra_vars(equilibrium_data: IDSToplevel, extra_var_col: ExtraVarCollection):
-    if 'z_boundary_outline' in extra_var_col.extra_var_dirs.keys():
+    if "z_boundary_outline" in extra_var_col.extra_var_dirs.keys():
         equilibrium_data.time_slice[0].boundary.outline.z = extra_var_col.get_val(
             "z_boundary_outline", equilibrium_data.time[0]
         )
-    if 'r_boundary_outline' in extra_var_col.extra_var_dirs.keys():
+    if "r_boundary_outline" in extra_var_col.extra_var_dirs.keys():
         equilibrium_data.time_slice[0].boundary.outline.r = extra_var_col.get_val(
             "r_boundary_outline", equilibrium_data.time[0]
         )

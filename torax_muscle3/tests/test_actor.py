@@ -1,9 +1,10 @@
 import imas
 import pytest
 import torax
+from imas.ids_defs import CLOSEST_INTERP
+
 import torax_muscle3
 from torax_muscle3.torax_actor import main as torax_actor
-from imas.ids_defs import CLOSEST_INTERP
 
 # libmuscle and ymmsl are optional dependencies, so may not be installed
 libmuscle = pytest.importorskip("libmuscle")
@@ -16,36 +17,37 @@ pytest.importorskip("imas_core")
 
 def source_for_tests():
     """MUSCLE3 actor sending out imas data to test torax-m3 actor"""
-    instance = libmuscle.Instance({ymmsl.Operator.O_F: ["equilibrium_out"]})
-    while instance.reuse_instance():
-        imas_filepath = instance.get_setting("imas_source")
-        with imas.DBEntry(uri=imas_filepath, mode="r") as db:
-            equilibrium_data = db.get(ids_name="equilibrium")
-
-        msg_equilibrium_out = libmuscle.Message(
-            0, data=equilibrium_data.serialize(), next_timestamp=None
-        )
-        instance.send("equilibrium_out", msg_equilibrium_out)
+    instance = libmuscle.Instance()
+    ports = instance.list_ports()[ymmsl.Operator.O_F]
+    imas_filepath = instance.get_setting("imas_source")
+    with imas.DBEntry(uri=imas_filepath, mode="r") as db:
+        while instance.reuse_instance():
+            for port in ports:
+                ids_name = port.replace("_out", "")
+                ids_data = db.get(ids_name=ids_name)
+                msg_out = libmuscle.Message(
+                    0, data=ids_data.serialize(), next_timestamp=None
+                )
+                instance.send(port, msg_out)
 
 
 def sink_for_tests():
     """MUSCLE3 actor receiving imas data to test torax-m3 actor"""
-    instance = libmuscle.Instance({ymmsl.Operator.F_INIT: ["equilibrium_in"]})
-    while instance.reuse_instance():
-        data_sink_path = instance.get_setting("imas_sink")
-        msg_equilibrium_in = instance.receive("equilibrium_in")
-        equilibrium_data = imas.IDSFactory().equilibrium()
-        equilibrium_data.deserialize(msg_equilibrium_in.data)
-        with imas.DBEntry(uri=data_sink_path, mode="w") as db:
-            db.put(equilibrium_data)
+    instance = libmuscle.Instance()
+    ports = instance.list_ports()[ymmsl.Operator.F_INIT]
+    data_sink_path = instance.get_setting("imas_sink")
+    with imas.DBEntry(uri=data_sink_path, mode="w") as db:
+        while instance.reuse_instance():
+            for port in ports:
+                ids_name = port.replace("_in", "")
+                msg_in = instance.receive(port)
+                ids_data = getattr(imas.IDSFactory(), ids_name)()
+                ids_data.deserialize(msg_in.data)
+                db.put(ids_data)
 
 
 def reply_for_tests():
-    """MUSCLE3 actor receiving imas data to test torax-m3 actor"""
-    instance = libmuscle.Instance({
-      ymmsl.Operator.F_INIT: ["equilibrium_in"],
-      ymmsl.Operator.O_F: ["equilibrium_out"],
-      })
+    instance = libmuscle.Instance()
     imas_filepath = instance.get_setting("imas_source")
     with imas.DBEntry(uri=imas_filepath, mode="r") as db:
         equilibrium_data = db.get(ids_name="equilibrium")
@@ -54,17 +56,29 @@ def reply_for_tests():
             while instance.reuse_instance():
                 msg_in = instance.receive("equilibrium_in")
                 equilibrium_data = db2.get_slice(
-                  ids_name="equilibrium",
-                  time_requested=msg_in.timestamp,
-                  interpolation_method=CLOSEST_INTERP,
+                    ids_name="equilibrium",
+                    time_requested=msg_in.timestamp,
+                    interpolation_method=CLOSEST_INTERP,
                 )
                 msg_equilibrium_out = libmuscle.Message(
-                    msg_in.timestamp, data=equilibrium_data.serialize(), next_timestamp=msg_in.next_timestamp
+                    msg_in.timestamp,
+                    data=equilibrium_data.serialize(),
+                    next_timestamp=msg_in.next_timestamp,
                 )
                 instance.send("equilibrium_out", msg_equilibrium_out)
 
 
-YMMSL_OUTPUT = """
+def mirror_for_tests():
+    """MUSCLE3 actor receiving imas data to test torax-m3 actor"""
+    instance = libmuscle.Instance()
+    ports = instance.list_ports()[ymmsl.Operator.F_INIT]
+    while instance.reuse_instance():
+        for port in ports:
+            msg_in = instance.receive(port)
+            instance.send(port.replace("_in", "_out"), msg_in)
+
+
+YMMSL_OUTPUT_TEMPLATE = """
 ymmsl_version: v0.1
 model:
   name: test_model
@@ -72,19 +86,19 @@ model:
     sink:
       implementation: sink
       ports:
-        f_init: [equilibrium_in]
+        f_init: [IDS_NAME_in]
     torax:
       implementation: torax
       ports:
-        o_f: [equilibrium_o_f]
+        o_f: [IDS_NAME_o_f]
   conduits:
-    torax.equilibrium_o_f: sink.equilibrium_in
+    torax.IDS_NAME_o_f: sink.IDS_NAME_in
 settings:
   sink.imas_sink: {data_sink_path}
   torax.python_config_module: {config_path}
 """
 
-YMMSL_INPUT = """
+YMMSL_INPUT_TEMPLATE = """
 ymmsl_version: v0.1
 model:
   name: test_model
@@ -92,19 +106,19 @@ model:
     source:
       implementation: source
       ports:
-        o_f: [equilibrium_out]
+        o_f: [IDS_NAME_out]
     torax:
       implementation: torax
       ports:
-        f_init: [equilibrium_f_init]
+        f_init: [IDS_NAME_f_init]
   conduits:
-    source.equilibrium_out: torax.equilibrium_f_init
+    source.IDS_NAME_out: torax.IDS_NAME_f_init
 settings:
   source.imas_source: {data_source_path}
   torax.python_config_module: {config_path}
 """
 
-YMMSL_INNER = """
+YMMSL_REPLY_TEMPLATE = """
 ymmsl_version: v0.1
 model:
   name: test_model
@@ -112,23 +126,67 @@ model:
     reply:
       implementation: reply
       ports:
-        f_init: [equilibrium_in]
-        o_f: [equilibrium_out]
+        f_init: [IDS_NAME_in]
+        o_f: [IDS_NAME_out]
     torax:
       implementation: torax
       ports:
-        s: [equilibrium_s]
-        o_i: [equilibrium_o_i]
+        s: [IDS_NAME_s]
+        o_i: [IDS_NAME_o_i]
   conduits:
-    torax.equilibrium_o_i: reply.equilibrium_in
-    reply.equilibrium_out: torax.equilibrium_s
+    torax.IDS_NAME_o_i: reply.IDS_NAME_in
+    reply.IDS_NAME_out: torax.IDS_NAME_s
 settings:
   reply.imas_source: {data_source_path}
   torax.python_config_module: {config_path}
 """
 
+YMMSL_INNER_TEMPLATE = """
+ymmsl_version: v0.1
+model:
+  name: test_model
+  components:
+    mirror:
+      implementation: mirror
+      ports:
+        f_init: [IDS_NAME_in]
+        o_f: [IDS_NAME_out]
+    torax:
+      implementation: torax
+      ports:
+        s: [IDS_NAME_s]
+        o_i: [IDS_NAME_o_i]
+  conduits:
+    torax.IDS_NAME_o_i: mirror.IDS_NAME_in
+    mirror.IDS_NAME_out: torax.IDS_NAME_s
+settings:
+  torax.python_config_module: {config_path}
+"""
 
-@pytest.mark.parametrize("ymmsl_text", [YMMSL_INPUT, YMMSL_OUTPUT, YMMSL_INNER])
+YMMSL_INPUT_EQUILIBRIUM = YMMSL_INPUT_TEMPLATE.replace("IDS_NAME", "equilibrium")
+YMMSL_INPUT_CORE_PROFILES = YMMSL_INPUT_TEMPLATE.replace("IDS_NAME", "core_profiles")
+YMMSL_OUTPUT_EQUILIBRIUM = YMMSL_OUTPUT_TEMPLATE.replace("IDS_NAME", "equilibrium")
+YMMSL_OUTPUT_CORE_PROFILES = YMMSL_OUTPUT_TEMPLATE.replace("IDS_NAME", "core_profiles")
+YMMSL_REPLY_EQUILIBRIUM = YMMSL_REPLY_TEMPLATE.replace("IDS_NAME", "equilibrium")
+# YMMSL_REPLY_CORE_PROFILES = YMMSL_REPLY_TEMPLATE.replace('IDS_NAME', 'core_profiles')
+YMMSL_INNER_EQUILIBRIUM = YMMSL_INNER_TEMPLATE.replace("IDS_NAME", "equilibrium")
+YMMSL_INNER_CORE_PROFILES = YMMSL_INNER_TEMPLATE.replace("IDS_NAME", "core_profiles")
+
+
+@pytest.mark.parametrize(
+    "ymmsl_text",
+    [
+        pytest.param(YMMSL_INPUT_EQUILIBRIUM, id="input equilibrium"),
+        pytest.param(YMMSL_OUTPUT_EQUILIBRIUM, id="output equilibrium"),
+        pytest.param(YMMSL_OUTPUT_CORE_PROFILES, id="output core_profiles"),
+        pytest.param(YMMSL_REPLY_EQUILIBRIUM, id="reply equilibrium"),
+        pytest.param(YMMSL_INNER_CORE_PROFILES, id="inner core_profiles"),
+        # # no core_profiles in input_data
+        # pytest.param(YMMSL_INPUT_CORE_PROFILES, id='input core_profiles'),
+        # # equilibrium_output not sufficient for equilibrium input
+        # pytest.param(YMMSL_INNER_EQUILIBRIUM, id='inner equilibrium'),
+    ],
+)
 @pytest.mark.filterwarnings("ignore:.*use of fork():DeprecationWarning")
 def test_actor(tmp_path, monkeypatch, ymmsl_text):
     monkeypatch.chdir(tmp_path)
@@ -137,7 +195,7 @@ def test_actor(tmp_path, monkeypatch, ymmsl_text):
     data_sink_path = f"imas:hdf5?path={(tmp_path / 'sink_dir').absolute()}"
     config_path = f"{torax.__path__[0]}/examples/iterhybrid_predictor_corrector.py"
     configuration = ymmsl.load(
-        YMMSL_INNER.format(
+        ymmsl_text.format(
             data_source_path=data_source_path,
             data_sink_path=data_sink_path,
             config_path=config_path,
@@ -145,6 +203,7 @@ def test_actor(tmp_path, monkeypatch, ymmsl_text):
     )
     implementations = {
         "reply": reply_for_tests,
+        "mirror": mirror_for_tests,
         "sink": sink_for_tests,
         "source": source_for_tests,
         "torax": torax_actor,
