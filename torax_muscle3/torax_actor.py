@@ -11,7 +11,7 @@ Last (for sure) compatible torax commit: 4b76ef0566
 """
 
 import logging
-from typing import Dict, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 from imas import DBEntry, IDSFactory
@@ -22,6 +22,7 @@ from torax._src.config.build_runtime_params import (
     get_consistent_runtime_params_and_geometry,
 )
 from torax._src.config.config_loader import build_torax_config_from_file
+from torax._src.core_profiles.profile_conditions import ProfileConditions
 from torax._src.geometry import geometry
 from torax._src.geometry.imas import IMASConfig
 from torax._src.geometry.pydantic_model import Geometry, GeometryConfig
@@ -31,6 +32,7 @@ from torax._src.imas_tools.output.equilibrium import torax_state_to_imas_equilib
 from torax._src.orchestration import initial_state as initial_state_lib
 from torax._src.orchestration.run_simulation import make_step_fn, prepare_simulation
 from torax._src.state import SimError
+from torax._src.torax_pydantic.model_config import ToraxConfig
 from ymmsl import Operator
 
 from torax_muscle3.utils import (
@@ -51,7 +53,7 @@ class ToraxMuscleRunner:
     first_run: bool = True
     output_all_timeslices: Optional[bool] = False
     db_out: DBEntry
-    torax_config: Dict
+    torax_config: ToraxConfig
     step_fn: SimulationStepFn
     time_step_calculator_dynamic_params = None
     equilibrium_interval = None
@@ -262,13 +264,18 @@ class ToraxMuscleRunner:
                     t,
                     np.asarray(my_slice.time_slice[0].boundary.outline.r),
                 )
-        self.step_fn._geometry_provider = Geometry(
-            geometry_type=geometry.GeometryType.IMAS,
-            geometry_configs=geometry_configs,
-        ).build_provider
         # temp extra vars code
         self.extra_var_col.pad_extra_vars()
         self.last_equilibrium_call = self.t_cur
+        self.torax_config.update_fields(
+            {
+                "geometry": Geometry(
+                    geometry_type=geometry.GeometryType.IMAS,
+                    geometry_configs=geometry_configs,
+                )
+            }
+        )
+        self.step_fn = make_step_fn(self.torax_config)
 
     def receive_core_profiles(self, port_name: str) -> None:
         if not self.instance.is_connected(f"core_profiles_{port_name}"):
@@ -288,7 +295,9 @@ class ToraxMuscleRunner:
             return
 
         core_profiles_conditions = profile_conditions_from_IMAS(core_profiles_data)
-        self.torax_config["profile_conditions"] = {**core_profiles_conditions}
+        self.torax_config.update_fields(
+            {"profile_conditions": ProfileConditions(core_profiles_conditions)}
+        )
         self.step_fn = make_step_fn(self.torax_config)
 
     def receive_ids(
