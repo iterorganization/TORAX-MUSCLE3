@@ -17,7 +17,6 @@ from packaging.version import Version
 
 import torax_muscle3
 
-
 print("python exec:", sys.executable)
 print("sys.path:", sys.path)
 
@@ -25,34 +24,18 @@ print("sys.path:", sys.path)
 # The documented project’s name
 project = src_project = PROJECT = "TORAX-MUSCLE3"
 PACKAGE = "TORAX-MUSCLE3"
-src_group = GROUP = "IMEX"
 
 # A copyright statement in the style '2008, Author Name'.
 copyright = f"2020-{datetime.datetime.now().year}, ITER Organization"
 # The author name(s) of the document
 author = "ITER Organization"
-src_host = "git.iter.org"
-
-# Parse urls here for convenience, to be re-used
-
-# ITER docs
-iter_projects = "https://git.iter.org/projects/"
-imas_repos = urljoin(iter_projects, "IMAS/")
-imex_repos = urljoin(iter_projects, "IMEX/")
-issue_url = jira_url = "https://jira.iter.org/browse/"
-
-# PDS
-repository_url = f"{iter_projects}/{src_group}/repos/{src_project}/"
-blob_url = urljoin(repository_url, "browse/")
-mr_url = urljoin(repository_url, "/pull-requests")
-
+src_host = "https://github.com/iterorganization/"
 
 # Configuration of sphinx.ext.extlinks
 # See https://www.sphinx-doc.org/en/master/usage/extensions/extlinks.html
 # unique name: (base URL, label prefix)
-extlinks = {
-    "src": (blob_url + "%s", f"{src_group}/{src_project}/%s"),
-}
+extlinks = {}
+
 
 full_version = Version(torax_muscle3.__version__)
 
