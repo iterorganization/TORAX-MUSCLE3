@@ -10,7 +10,7 @@ import numpy as np
 from imas.ids_toplevel import IDSToplevel
 from libmuscle import Instance
 from torax._src.geometry.imas import IMASConfig
-from torax._src.torax_pydantic import model_config
+import torax
 from ymmsl import SettingValue
 
 logger = logging.getLogger()
@@ -61,7 +61,7 @@ class ExtraVarCollection:
         return var_dir.ys[idx]
 
 
-def get_geometry_config_dict(config: model_config.ToraxConfig) -> dict:
+def get_geometry_config_dict(config: torax.ToraxConfig) -> dict:
     # only get overlapping keys from given config and IMASConfig
     imas_config_keys = IMASConfig.__annotations__
     # we can pick a random entry since all fields are time_invariant except hires_fac

@@ -19,25 +19,28 @@ from imas.ids_defs import CLOSEST_INTERP
 from imas.ids_toplevel import IDSToplevel
 from libmuscle import Instance, Message
 from torax import experimental as torax_experimental
-from torax._src.config.build_runtime_params import (
+from torax import (
+    build_torax_config_from_file,
+    PostProcessedOutputs,
+    SimError,
+    ToraxConfig,
+)
+from torax.experimental import (
     RuntimeParamsProvider,
+    get_initial_state_and_post_processed_outputs,
+    make_step_fn,
+    SimState,
+    SimulationStepFn,
+)
+from torax._src.config.build_runtime_params import (
     get_consistent_runtime_params_and_geometry,
 )
-from torax._src.config.config_loader import build_torax_config_from_file
 from torax._src.geometry import geometry
 from torax._src.geometry.imas import IMASConfig
 from torax._src.geometry.pydantic_model import GeometryConfig
-from torax._src.geometry.standard_geometry import StandardGeometryProvider
 from torax._src.imas_tools.input.core_profiles import profile_conditions_from_IMAS
 from torax._src.imas_tools.output.core_profiles import core_profiles_to_IMAS
 from torax._src.imas_tools.output.equilibrium import torax_state_to_imas_equilibrium
-from torax._src.orchestration import initial_state as initial_state_lib
-from torax._src.orchestration.run_simulation import make_step_fn, prepare_simulation
-from torax._src.orchestration.sim_state import SimState
-from torax._src.orchestration.step_function import SimulationStepFn
-from torax._src.output_tools.post_processing import PostProcessedOutputs
-from torax._src.state import SimError
-from torax._src.torax_pydantic.model_config import ToraxConfig
 from ymmsl import Operator
 
 from torax_muscle3.utils import (
@@ -65,7 +68,7 @@ class ToraxMuscleRunner:
     """Interval for communation through MUSCLE3 ports"""
     step_fn: SimulationStepFn
     """Torax step_function object"""
-    geometry_provider: StandardGeometryProvider
+    geometry_provider: torax_experimental.geometry.StandardGeometryProvider
     """Torax geometry_provider object"""
     runtime_params_provider: RuntimeParamsProvider
     """Torax runtime_params_provider object"""
@@ -122,11 +125,6 @@ class ToraxMuscleRunner:
         self.torax_config = build_torax_config_from_file(
             path=config_module_str,
         )
-        (
-            self.sim_state,
-            self.post_processed_outputs,
-            self.step_fn,
-        ) = prepare_simulation(self.torax_config)
         self.geometry_provider = self.torax_config.geometry.build_provider
         self.runtime_params_provider = RuntimeParamsProvider.from_config(
             self.torax_config
@@ -136,17 +134,17 @@ class ToraxMuscleRunner:
         """Initialize the actor state before the time loop using MUSCLE3 connections"""
         self.receive_equilibrium(port_name="f_init")
         self.receive_core_profiles(port_name="f_init")
-        self.t_cur = self.sim_state.t
         if self.first_run or self.instance.is_connected("equilibrium_f_init"):
             self.step_fn = make_step_fn(self.torax_config)
             self.sim_state, self.post_processed_outputs = (
-                initial_state_lib.get_initial_state_and_post_processed_outputs(
+                get_initial_state_and_post_processed_outputs(
                     step_fn=self.step_fn,
                     geometry_overrides=self.geometry_provider,
                     runtime_params_overrides=self.runtime_params_provider,
                 )
             )
             self.t_final = self.step_fn.runtime_params_provider.numerics.t_final
+        self.t_cur = self.sim_state.t
         self.first_run = False
 
         if self.output_all_timeslices:
