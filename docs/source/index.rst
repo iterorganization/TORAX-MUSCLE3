@@ -5,15 +5,17 @@
    define TOC here, but it'll be put in the sidebar by the theme
 
 =========================
-IMAS PDS Manual
+TORAX-MUSCLE3 Manual
 =========================
 
-IMAS PDS is an integrated modeling tool for IMAS simulations.
+TORAX-MUSCLE3 is a MUSCLE3 actor for the TORAX simulation code.
 
 README
 ------
 
-The README is best read on the `git page <https://git.iter.org/projects/SCEN/repos/torax-m3/browse>`_.
+The README is best read on the `git page <https://github.com/iterorganization/TORAX-MUSCLE3/>`_.
+
+Read what's new in the current version of TORAX-MUSCLE3 in our :ref:`changelog`!
 
 Manual
 ------
@@ -25,7 +27,7 @@ Manual
    self
    installing
    usage
-   tips_and_tricks
+   changelog
 
 .. toctree::
    :caption: API docs
@@ -39,6 +41,8 @@ Manual
 
    code_style
    ci_config
+   release
+   packaging
 
 
 

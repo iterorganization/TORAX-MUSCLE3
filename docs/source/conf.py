@@ -110,7 +110,7 @@ html_theme = "sphinx_immaterial"
 # and
 # https://sphinx-immaterial.readthedocs.io/en/latest/customization.html#confval-html_theme_options
 html_theme_options = {
-    "repo_url": "https://github.com/mikesndrs/TORAX-MUSCLE3",
+    "repo_url": "https://github.com/iterorganization/TORAX-MUSCLE3",
     "repo_name": "TORAX-MUSCLE3",
     "icon": {
         "repo": "fontawesome/brands/bitbucket",

@@ -1,17 +1,17 @@
 .. _`installing`:
 
-Installing the PDS
-=================================
+Installing TORAX-MUSCLE3
+========================
 
-SDCC setup
-----------
+User installation
+-------------------
 
-.. note::
-  A module will become available on SDCC after the first release of PDS.
-  Use the following instructions to work with the latest development version.
+  .. code-block:: bash
 
-.. 
-  Update SDCC setup on first release
+    pip install torax-muscle3
+
+SDCC installation
+-----------------
 
 * Setup a project folder and clone git repository
 
@@ -19,38 +19,24 @@ SDCC setup
 
     mkdir projects
     cd projects
-    git clone git@github.com:mikesndrs/TORAX-MUSCLE3.git
+    git clone git@github.com:iterorganization/TORAX-MUSCLE3.git
     cd TORAX-MUSCLE3
 
 * Setup a python virtual environment and install python dependencies
 
   .. code-block:: bash
 
-    # load IMAS and IMASPy before install
-    module load IMAS-Python MUSCLE3
+    module load Python
+
     python3 -m venv ./venv
     . venv/bin/activate
     pip install --upgrade pip
     pip install --upgrade wheel setuptools
     # For development an installation in editable mode may be more convenient
-    pip install -e .[all]
-
-* Load IMAS and IMASPy
-
-  .. code-block:: bash
-
-    # Load modules every time you use torax-muscle3
-    module load IMAS/3.40.1-5.1.0-intel-2020b IMASPy MUSCLE3
-    # And activate the Python virtual environment
-    . venv/bin/activate
-
-* Test the installation
-
-  .. code-block:: bash
+    pip install .[all]
 
     python3 -c "import torax_muscle3; print(torax_muscle3.__version__)"
     pytest
-
 
 Ubuntu installation
 -------------------
@@ -69,7 +55,7 @@ Ubuntu installation
 
     mkdir projects
     cd projects
-    git clone git@github.com:mikesndrs/TORAX-MUSCLE3.git
+    git clone git@github.com:iterorganization/TORAX-MUSCLE3.git
     cd TORAX-MUSCLE3
 
 * Setup a python virtual environment and install python dependencies
@@ -83,14 +69,12 @@ Ubuntu installation
     # For development an installation in editable mode may be more convenient
     pip install .[all]
 
-* Test the installation
-
-  .. code-block:: bash
-
-    python3 -c "import torax_m3; print(torax_muscle3.__version__)"
     pytest
 
-* To build the torax-muscle3 documentation, execute:
+Documentation
+-------------
+
+* To build the TORAX-MUSCLE3 documentation, execute:
 
   .. code-block:: bash
 
