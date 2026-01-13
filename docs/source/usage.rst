@@ -1,6 +1,6 @@
 .. _`usage`:
 
-Running simulations with Muscle3
+Running simulations with MUSCLE3
 ################################
 
 For general MUSCLE3 workflow instructions, see the `MUSCLE3 documentation <https://muscle3.readthedocs.io/en/latest/>`_.
@@ -14,6 +14,8 @@ Available Operational Modes
 
 .. code-block:: bash
   implementations:
+    env:
+      IMAS_VERSION: "4.0.0"
     torax:
       executable: python
       args: "-u -m torax_muscle3.torax_actor"
@@ -32,14 +34,15 @@ Available Settings
 Available Ports
 ---------------
 
-The Torax actor currently only has equilibrium IDS input and output.
+The Torax actor currently only has IDS coupling functionality for both input and output for the following IDSs:
+[equilibrium, core_profiles].
 
 * Optional
 
-  - ***equilibrium_f_init (F_INIT)***: equilibrium IDS as initial input.
-  - ***equilibrium_o_i (O_I)***: equilibrium IDS as inner loop output.
-  - ***equilibrium_s (S)***: equilibrium IDS as inner loop input.
-  - ***equilibrium_o_f (O_F)***: equilibrium IDS as final output.
+  - ***<ids_name>_f_init (F_INIT)***: given IDS as initial input.
+  - ***<ids_name>_o_i (O_I)***: given IDS as inner loop output.
+  - ***<ids_name>_s (S)***: given IDS as inner loop input.
+  - ***<ids_name>_o_f (O_F)***: given IDS as final output.
 
 General
 -------

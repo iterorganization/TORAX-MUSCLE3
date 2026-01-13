@@ -81,7 +81,7 @@ linting = [
 ]
 
 [project.urls]
-homepage = "https://github.com/mikesndrs/TORAX-MUSCLE3"
+homepage = "https://github.com/iterorganization/TORAX-MUSCLE3"
 
 [tool.setuptools.packages.find]
 where = ["."]
