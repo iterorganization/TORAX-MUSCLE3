@@ -3,7 +3,7 @@
 Changelog
 =========
 
-TORAX-MUSCLE3 0.0.1
+TORAX-MUSCLE3 0.1.0
 ------------------
 
 Features

@@ -32,7 +32,7 @@ To add an actor to your MUSCLE3 workflow, add the following to the implementatio
 
 ```bash
 implementations:
-  *component_name*:
+  torax_actor:
     executable: python
     args: -u -m torax_muscle3.torax_actor
 ```
