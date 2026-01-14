@@ -27,7 +27,7 @@ classifiers = [
     "Intended Audience :: System Administrators",
 # The license is prepended by private which makes it a valid trove classifier,
 # it will also prevent uploading to package indices such as PyPI
-    "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)",
+    "License :: OSI Approved :: Apache 2.0",
     "Natural Language :: English",
     "Operating System :: POSIX",
     "Operating System :: POSIX :: Linux",
@@ -53,7 +53,6 @@ dependencies = [
     # "torax[dev] @ git+https://github.com/google-deepmind/torax.git@main",
     "torax[dev]>=1.2.0",
     "imas-python",
-    # "imas_core @ git+ssh://git@git.iter.org/imas/al-core.git@develop",
     "imas_core",
     "muscle3",
 ]
