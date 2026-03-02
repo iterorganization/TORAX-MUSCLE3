@@ -51,7 +51,7 @@ dependencies = [
     "rich",
     "packaging",
     # "torax[dev] @ git+https://github.com/google-deepmind/torax.git@main",
-    "torax[dev]>=1.3.0",
+    "torax[dev]==1.3.0",
     "imas-python",
     "muscle3",
 ]
