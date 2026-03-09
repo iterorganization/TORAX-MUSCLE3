@@ -9,7 +9,7 @@ from torax_muscle3.torax_actor import main as torax_actor
 
 
 def source_for_tests():
-    """MUSCLE3 actor sending out imas data to test torax-m3 actor"""
+    """MUSCLE3 actor sending out imas data to test torax-muscle3 actor"""
     instance = libmuscle.Instance()
     ports = instance.list_ports()[ymmsl.Operator.O_F]
     imas_filepath = instance.get_setting("imas_source")
@@ -25,7 +25,7 @@ def source_for_tests():
 
 
 def sink_for_tests():
-    """MUSCLE3 actor receiving imas data to test torax-m3 actor"""
+    """MUSCLE3 actor receiving imas data to test torax-muscle3 actor"""
     instance = libmuscle.Instance()
     ports = instance.list_ports()[ymmsl.Operator.F_INIT]
     data_sink_path = instance.get_setting("imas_sink")
@@ -62,7 +62,7 @@ def reply_for_tests():
 
 
 def mirror_for_tests():
-    """MUSCLE3 actor receiving imas data to test torax-m3 actor"""
+    """MUSCLE3 actor receiving imas data to test torax-muscle3 actor"""
     instance = libmuscle.Instance()
     ports = instance.list_ports()[ymmsl.Operator.F_INIT]
     while instance.reuse_instance():
