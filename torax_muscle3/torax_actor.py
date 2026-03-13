@@ -225,7 +225,6 @@ class ToraxMuscleRunner:
     def get_core_profiles_ids(self) -> IDSToplevel:
         """Get core_profiles IDS from torax state"""
         core_profiles_data = core_profiles_to_IMAS(
-            self.step_fn.runtime_params_provider,
             self.torax_config,
             [self.post_processed_outputs],
             [self.sim_state.core_profiles],
