@@ -51,5 +51,5 @@ Using mypy
 
 .. code-block:: console
 
-    $ mypy torax-m3
+    $ mypy torax-muscle3
     Success: no issues found in 6 source files
