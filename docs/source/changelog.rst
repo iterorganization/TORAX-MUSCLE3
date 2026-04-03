@@ -3,6 +3,11 @@
 Changelog
 =========
 
+TORAX-MUSCLE3 0.1.1
+------------------
+
+- Fixed Torax version at 1.3.0
+
 TORAX-MUSCLE3 0.1.0
 ------------------
 
