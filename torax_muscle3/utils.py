@@ -4,18 +4,22 @@ Utility functions for muscle3 and torax.
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, TypeVar, cast
+from typing import Any, Dict, List, Optional, TypeVar, cast, TYPE_CHECKING
+import torax
 
 import numpy as np
 from imas.ids_toplevel import IDSToplevel
 from libmuscle import Instance
 from torax._src.geometry.imas import IMASConfig
-import torax
-from ymmsl import SettingValue
+
+if TYPE_CHECKING:
+    from ymmsl import SettingValue
+
+    TSetting = TypeVar("TSetting", bound=SettingValue)
+else:
+    TSetting = Any
 
 logger = logging.getLogger()
-
-TSetting = TypeVar("TSetting", bound=SettingValue)
 
 
 @dataclass
