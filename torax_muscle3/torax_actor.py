@@ -341,7 +341,7 @@ class ToraxMuscleRunner:
 
         sources = sources_from_IMAS(core_sources_data)
         # Currently creates problem with icrh: tries to load TORIC. See why.
-        del sources['icrh']
+        # del sources['icrh']
         # exit()
         self.torax_config.update_fields(
             {"sources": sources}
