@@ -13,14 +13,7 @@ from libmuscle import Instance
 from torax._src.geometry.imas import IMASConfig
 
 if TYPE_CHECKING:
-    from packaging.version import Version
-    from importlib.metadata import version
-
-    ymmsl_version = Version(version("ymmsl"))
-    if ymmsl_version >= Version("0.15.0"):
-        from ymmsl.v0_2 import SettingValue
-    else:
-        from ymmsl import SettingValue
+    from libmuscle.instance import SettingValue
 else:
     SettingValue = Any
 
