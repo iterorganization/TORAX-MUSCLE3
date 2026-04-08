@@ -3,6 +3,11 @@
 Changelog
 =========
 
+TORAX-MUSCLE3 0.1.2
+------------------
+
+- Only import ymmsl typehints during type checking
+
 TORAX-MUSCLE3 0.1.1
 ------------------
 
