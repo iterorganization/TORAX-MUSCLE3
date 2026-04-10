@@ -125,6 +125,7 @@ class ToraxMuscleRunner:
         self.torax_config = build_torax_config_from_file(
             path=config_module_str,
         )
+        self.fix_ymmsl_settings()
         self.geometry_provider = self.torax_config.geometry.build_provider
         self.runtime_params_provider = RuntimeParamsProvider.from_config(
             self.torax_config
@@ -367,6 +368,16 @@ class ToraxMuscleRunner:
             self.t_next_outer = t_next
         elif port_name == "s":
             self.t_next_inner = t_next
+
+    def fix_ymmsl_settings(self) -> None:
+        for numerics_setting in [
+            "t_initial",
+            "t_final",
+            "fixed_dt",
+        ]:
+            var = get_setting_optional(self.instance, numerics_setting, None)
+            if var is not None:
+                self.torax_config.update_fields({f"numerics.{numerics_setting}": var})
 
 
 def main() -> None:
