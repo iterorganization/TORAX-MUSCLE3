@@ -371,17 +371,13 @@ class ToraxMuscleRunner:
 
     def fix_ymmsl_settings(self) -> None:
         for numerics_setting in [
-            't_initial',
-            't_final',
-            'fixed_dt',
+            "t_initial",
+            "t_final",
+            "fixed_dt",
         ]:
-            var = get_setting_optional(
-                self.instance, numerics_setting, None
-            )
+            var = get_setting_optional(self.instance, numerics_setting, None)
             if var is not None:
-                self.torax_config.update_fields(
-                    {f"numerics.{numerics_setting}": var}
-                )
+                self.torax_config.update_fields({f"numerics.{numerics_setting}": var})
 
 
 def main() -> None:
