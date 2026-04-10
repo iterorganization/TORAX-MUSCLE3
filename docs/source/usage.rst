@@ -30,6 +30,9 @@ Available Settings
 * Optional
 
   - **output_all_timeslices**: (string) IMAS Data Dictionary version number to which data will be converted. Defaults to original dd_version of the data.
+  - **t_initial**: (float) starting time of TORAX actor.
+  - **t_final**: (float) ending time of TORAX actor.
+  - **fixed_dt**: (float) times tep of TORAX actor.
 
 Available Ports
 ---------------
