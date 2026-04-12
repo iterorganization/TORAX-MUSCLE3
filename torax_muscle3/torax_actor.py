@@ -344,7 +344,7 @@ class ToraxMuscleRunner:
         # del sources['icrh']
         # exit()
         self.torax_config.update_fields(
-            {"sources": sources}
+            {f"sources.{key}": value for key, value in sources.items()}
         )
         self.runtime_params_provider = RuntimeParamsProvider.from_config(
             self.torax_config
@@ -380,6 +380,7 @@ class ToraxMuscleRunner:
             t=self.sim_state.t,
             runtime_params_provider=self.runtime_params_provider,
             geometry_provider=self.geometry_provider,
+            core_profiles= self.sim_state.core_profiles,
         )
         dt = self.step_fn.time_step_calculator.next_dt(
             self.sim_state.t,
