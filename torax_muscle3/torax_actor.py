@@ -223,7 +223,7 @@ class ToraxMuscleRunner:
     def get_equilibrium_ids(self) -> IDSToplevel:
         """Get equilibrium IDS from torax state"""
         equilibrium_data = torax_state_to_imas_equilibrium(
-            self.sim_state, self.post_processed_outputs, self.receive_equilibrium
+            self.sim_state, self.post_processed_outputs, self.received_equilibrium
         )
         if self.extra_var_col is not None:
             equilibrium_data = merge_extra_vars(equilibrium_data, self.extra_var_col)
