@@ -80,7 +80,7 @@ class ToraxMuscleRunner:
     """Torax post_processed_outputs object"""
     extra_var_col: ExtraVarCollection
     """Object to save state of IDS variables that cannot be saved in Torax state """
-    received_equilibrium: IDSToplevel
+    received_equilibrium: IDSToplevel = None 
     """Most recently received equilibrium IDS, used for storing extra variables not in torax state like 2D profiles"""
     t_cur: float
     """Time value inside time loop"""
@@ -222,9 +222,14 @@ class ToraxMuscleRunner:
 
     def get_equilibrium_ids(self) -> IDSToplevel:
         """Get equilibrium IDS from torax state"""
-        equilibrium_data = torax_state_to_imas_equilibrium(
-            self.sim_state, self.post_processed_outputs, self.received_equilibrium
-        )
+        if self.received_equilibrium is not None:
+            equilibrium_data = torax_state_to_imas_equilibrium(
+                self.sim_state, self.post_processed_outputs, self.received_equilibrium
+            )
+        else:
+            equilibrium_data = torax_state_to_imas_equilibrium(
+                self.sim_state, self.post_processed_outputs
+            )
         if self.extra_var_col is not None:
             equilibrium_data = merge_extra_vars(equilibrium_data, self.extra_var_col)
         if self.received_equilibrium is not None:
