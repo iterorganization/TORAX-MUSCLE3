@@ -228,8 +228,8 @@ class ToraxMuscleRunner:
         if self.extra_var_col is not None:
             equilibrium_data = merge_extra_vars(equilibrium_data, self.extra_var_col)
         if self.received_equilibrium is not None:
-            for i in range(len(equilibrium_data.time_slice)):
-                equilibrium_data.time_slice[i].profiles_2d = self.received_equilibrium.time_slice[i].profiles_2d
+            time_slice_idx = np.argmin(np.abs(self.t_cur- self.received_equilibrium.time))
+            equilibrium_data.time_slice[0].profiles_2d = self.received_equilibrium.time_slice[time_slice_idx].profiles_2d
         return equilibrium_data
 
     def get_core_profiles_ids(self) -> IDSToplevel:
