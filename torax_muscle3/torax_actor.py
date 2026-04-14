@@ -235,6 +235,8 @@ class ToraxMuscleRunner:
         if self.received_equilibrium is not None:
             time_slice_idx = np.argmin(np.abs(self.t_cur- self.received_equilibrium.time))
             equilibrium_data.time_slice[0].profiles_2d = self.received_equilibrium.time_slice[time_slice_idx].profiles_2d
+            equilibrium_data.time_slice[0].global_quantities.psi_magnetic_axis = self.received_equilibrium.time_slice[time_slice_idx].global_quantities.psi_magnetic_axis
+            equilibrium_data.time_slice[0].global_quantities.psi_boundary = self.received_equilibrium.time_slice[time_slice_idx].global_quantities.psi_boundary
         return equilibrium_data
 
     def get_core_profiles_ids(self) -> IDSToplevel:
