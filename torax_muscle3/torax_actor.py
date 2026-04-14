@@ -235,7 +235,11 @@ class ToraxMuscleRunner:
         if self.received_equilibrium is not None:
             time_slice_idx = np.argmin(np.abs(self.t_cur- self.received_equilibrium.time))
             equilibrium_data.time_slice[0].profiles_2d = self.received_equilibrium.time_slice[time_slice_idx].profiles_2d
-            equilibrium_data.time_slice[0].global_quantities.psi_magnetic_axis = self.received_equilibrium.time_slice[time_slice_idx].global_quantities.psi_magnetic_axis
+            # TORAX uses DD4.0.0, psi_axis renamed to psi_magnetic_axis in DD4.1.0.
+            try:
+                equilibrium_data.time_slice[0].global_quantities.psi_axis = self.received_equilibrium.time_slice[time_slice_idx].global_quantities.psi_magnetic_axis
+            except AttributeError:
+                equilibrium_data.time_slice[0].global_quantities.psi_axis = self.received_equilibrium.time_slice[time_slice_idx].global_quantities.psi_axis
             equilibrium_data.time_slice[0].global_quantities.psi_boundary = self.received_equilibrium.time_slice[time_slice_idx].global_quantities.psi_boundary
         return equilibrium_data
 
