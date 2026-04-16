@@ -238,10 +238,10 @@ class ToraxMuscleRunner:
             equilibrium_data.time_slice[0].ggd = self.received_equilibrium.time_slice[time_slice_idx].ggd
             # TORAX uses DD4.0.0, psi_axis renamed to psi_magnetic_axis in DD4.1.0.
             try:
-                equilibrium_data.time_slice[0].global_quantities.psi_axis = self.received_equilibrium.time_slice[time_slice_idx].global_quantities.psi_magnetic_axis
+                equilibrium_data.time_slice[0].global_quantities.psi_axis = equilibrium_data.time_slice[0].profiles_1d.psi[0]
             except AttributeError:
-                equilibrium_data.time_slice[0].global_quantities.psi_axis = self.received_equilibrium.time_slice[time_slice_idx].global_quantities.psi_axis
-            equilibrium_data.time_slice[0].global_quantities.psi_boundary = self.received_equilibrium.time_slice[time_slice_idx].global_quantities.psi_boundary
+                equilibrium_data.time_slice[0].global_quantities.psi_magnetic_axis = equilibrium_data.time_slice[0].profiles_1d.psi[0]
+            equilibrium_data.time_slice[0].global_quantities.psi_boundary = equilibrium_data.time_slice[0].profiles_1d.psi[-1]
         return equilibrium_data
 
     def get_core_profiles_ids(self) -> IDSToplevel:
