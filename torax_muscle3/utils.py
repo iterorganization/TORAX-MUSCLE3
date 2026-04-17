@@ -11,12 +11,12 @@ from imas.ids_toplevel import IDSToplevel
 from libmuscle import Instance
 from torax._src.geometry.imas import IMASConfig
 import torax
-from ymmsl import SettingValue
+# from ymmsl import SettingValue
 
 logger = logging.getLogger()
 
-TSetting = TypeVar("TSetting", bound=SettingValue)
-
+# TSetting = TypeVar("TSetting", bound=SettingValue)
+TSetting = TypeVar("TSetting")
 
 @dataclass
 class ExtraVarDir:
