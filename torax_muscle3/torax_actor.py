@@ -284,6 +284,7 @@ class ToraxMuscleRunner:
                     ids_name="equilibrium",
                     time_requested=t,
                     interpolation_method=CLOSEST_INTERP,
+                    lazy = True,
                 )
                 config_kwargs = {
                     **torax_config_dict,
@@ -334,6 +335,7 @@ class ToraxMuscleRunner:
             return
 
         core_profiles_conditions = profile_conditions_from_IMAS(core_profiles_data)
+        core_profiles_conditions["initial_psi_mode"] = "geometry"  
         self.torax_config.update_fields(
             {"profile_conditions": core_profiles_conditions}
         )
