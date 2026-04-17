@@ -158,18 +158,23 @@ settings:
 
 YMMSL_INPUT_EQUILIBRIUM = YMMSL_INPUT_TEMPLATE.replace("IDS_NAME", "equilibrium")
 YMMSL_INPUT_CORE_PROFILES = YMMSL_INPUT_TEMPLATE.replace("IDS_NAME", "core_profiles")
+YMMSL_INPUT_CORE_SOURCES = YMMSL_INPUT_TEMPLATE.replace("IDS_NAME", "core_sources")
 YMMSL_OUTPUT_EQUILIBRIUM = YMMSL_OUTPUT_TEMPLATE.replace("IDS_NAME", "equilibrium")
 YMMSL_OUTPUT_CORE_PROFILES = YMMSL_OUTPUT_TEMPLATE.replace("IDS_NAME", "core_profiles")
+YMMSL_OUTPUT_CORE_SOURCES = YMMSL_OUTPUT_TEMPLATE.replace("IDS_NAME", "core_sources")
 YMMSL_REPLY_EQUILIBRIUM = YMMSL_REPLY_TEMPLATE.replace("IDS_NAME", "equilibrium")
 YMMSL_REPLY_CORE_PROFILES = YMMSL_REPLY_TEMPLATE.replace("IDS_NAME", "core_profiles")
+YMMSL_REPLY_CORE_SOURCES = YMMSL_REPLY_TEMPLATE.replace("IDS_NAME", "core_sources")
 YMMSL_INNER_EQUILIBRIUM = YMMSL_INNER_TEMPLATE.replace("IDS_NAME", "equilibrium")
 YMMSL_INNER_CORE_PROFILES = YMMSL_INNER_TEMPLATE.replace("IDS_NAME", "core_profiles")
+YMMSL_INNER_CORE_SOURCES = YMMSL_INNER_TEMPLATE.replace("IDS_NAME", "core_sources")
 
 
 @pytest.mark.parametrize(
     "ymmsl_text",
     [
         pytest.param(YMMSL_INPUT_EQUILIBRIUM, id="input equilibrium"),
+        pytest.param(YMMSL_INPUT_CORE_SOURCES, id="input core_sources"),
         pytest.param(YMMSL_OUTPUT_EQUILIBRIUM, id="output equilibrium"),
         pytest.param(YMMSL_OUTPUT_CORE_PROFILES, id="output core_profiles"),
         pytest.param(YMMSL_REPLY_EQUILIBRIUM, id="reply equilibrium"),
@@ -183,7 +188,11 @@ YMMSL_INNER_CORE_PROFILES = YMMSL_INNER_TEMPLATE.replace("IDS_NAME", "core_profi
 @pytest.mark.filterwarnings("ignore:.*use of fork():DeprecationWarning")
 def test_actor(tmp_path, monkeypatch, ymmsl_text):
     monkeypatch.chdir(tmp_path)
-    filename = "ITERhybrid_COCOS17_IDS_ddv4.nc"
+    
+    if "core_sources" in ymmsl_text:
+        filename = "core_sources_ddv4.nc"
+    else:
+        filename = "ITERhybrid_COCOS17_IDS_ddv4.nc"
     data_source_path = f"{torax_muscle3.__path__[0]}/tests/data/{filename}"
     data_sink_path = f"imas:hdf5?path={(tmp_path / 'sink_dir').absolute()}"
     config_path = f"{torax_muscle3.__path__[0]}/tests/basic_config.py"

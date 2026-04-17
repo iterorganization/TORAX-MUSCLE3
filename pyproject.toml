@@ -51,9 +51,9 @@ dependencies = [
     "rich",
     "packaging",
     # "torax[dev] @ git+https://github.com/google-deepmind/torax.git@main",
-    "torax[dev]==1.3.0",
+    "torax[dev] @ git+https://github.com/google-deepmind/torax.git@imas_input_core_sources",
     "imas-python",
-    "muscle3",
+    "muscle3==0.8.0",
 ]
 
 [project.optional-dependencies]
