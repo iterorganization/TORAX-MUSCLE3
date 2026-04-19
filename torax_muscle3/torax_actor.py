@@ -255,9 +255,22 @@ class ToraxMuscleRunner:
         torax_config_dict = get_geometry_config_dict(self.torax_config)
         torax_config_dict["geometry_type"] = "imas"
 
+        # Create a lighter equilibrium IDS  with only the fields needed for 
+        # geometry construction, to save memory since the full equilibrium can
+        # be large if it contains GGD and 2D Profiles. Can save a lot of time.
+        light_equilibrium = IDSFactory().equilibrium()
+        light_equilibrium.ids_properties.homogeneous_time = 1
+        light_equilibrium.time = equilibrium_data.time
+        light_equilibrium.vacuum_toroidal_field = equilibrium_data.vacuum_toroidal_field
+        light_equilibrium.time_slice.resize(len(equilibrium_data.time_slice))
+        for i in range(len(light_equilibrium.time_slice)):
+            light_equilibrium.time_slice[i].time = equilibrium_data.time_slice[i].time
+            light_equilibrium.time_slice[i].profiles_1d = equilibrium_data.time_slice[i].profiles_1d
+            light_equilibrium.time_slice[i].boundary = equilibrium_data.time_slice[i].boundary
+            light_equilibrium.time_slice[i].global_quantities = equilibrium_data.time_slice[i].global_quantities
         with DBEntry("imas:memory?path=/", "w") as db:
-            db.put(equilibrium_data)
-            for t in equilibrium_data.time:
+            db.put(light_equilibrium)
+            for t in light_equilibrium.time:
                 my_slice = db.get_slice(
                     ids_name="equilibrium",
                     time_requested=t,
