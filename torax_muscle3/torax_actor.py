@@ -106,6 +106,8 @@ class ToraxMuscleRunner:
                 self.run_o_i()
                 self.run_s()
                 self.run_timestep()
+                if self.finished:
+                    break
             self.run_o_f()
 
         self.finished = True
@@ -180,12 +182,14 @@ class ToraxMuscleRunner:
         )
         self.t_cur = self.sim_state.t
 
+        if sim_error != SimError.NO_ERROR:
+            raise RuntimeError(sim_error)
+            self.finished = True
+            return
+
         if self.output_all_timeslices:
             self.db_out.put_slice(self.get_equilibrium_ids())
             self.db_out.put_slice(self.get_core_profiles_ids())
-
-        if sim_error != SimError.NO_ERROR:
-            raise RuntimeError(sim_error)
 
     def run_o_f(self) -> None:
         """Send out final state using MUSCLE3 connections"""
@@ -257,12 +261,17 @@ class ToraxMuscleRunner:
 
         with DBEntry("imas:memory?path=/", "w") as db:
             db.put(equilibrium_data)
-            for t in equilibrium_data.time:
+            for i, t in enumerate(equilibrium_data.time):
                 my_slice = db.get_slice(
                     ids_name="equilibrium",
                     time_requested=t,
                     interpolation_method=CLOSEST_INTERP,
                 )
+                if (
+                    my_slice.code.output_flag
+                    and my_slice.code.output_flag[0] == -1
+                ):
+                    continue
                 config_kwargs = {
                     **torax_config_dict,
                     "equilibrium_object": my_slice,
