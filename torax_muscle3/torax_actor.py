@@ -267,10 +267,7 @@ class ToraxMuscleRunner:
                     time_requested=t,
                     interpolation_method=CLOSEST_INTERP,
                 )
-                if (
-                    my_slice.code.output_flag
-                    and my_slice.code.output_flag[0] == -1
-                ):
+                if my_slice.code.output_flag and my_slice.code.output_flag[0] == -1:
                     continue
                 config_kwargs = {
                     **torax_config_dict,
