@@ -92,7 +92,10 @@ class ToraxMuscleRunner:
     """Whether the run_sim function has been run fully"""
     last_equilibrium_call = -np.inf
     """Last timestamp for which the MUSCLE3 communication was done"""
-
+    last_core_profiles_call = -np.inf
+    """Last timestamp for which the MUSCLE3 communication was done"""
+    last_core_sources_call = -np.inf
+    """Last timestamp for which the MUSCLE3 communication was done"""
     def __init__(self) -> None:
         self.get_instance()
         self.extra_var_col = ExtraVarCollection()
@@ -159,7 +162,8 @@ class ToraxMuscleRunner:
     def run_o_i(self) -> None:
         """Send out time loop state using MUSCLE3 connections"""
         self.t_next_inner = self.get_t_next()
-        if self.t_cur >= self.last_equilibrium_call + self.equilibrium_interval:
+        # if self.t_cur >= self.last_equilibrium_call + self.equilibrium_interval:
+        if self.t_cur >= self.last_core_sources_call + self.equilibrium_interval:
             if self.instance.is_connected("equilibrium_o_i"):
                 self.send_ids(self.get_equilibrium_ids(), "equilibrium", "o_i")
             if self.instance.is_connected("core_profiles_o_i"):
@@ -167,7 +171,8 @@ class ToraxMuscleRunner:
 
     def run_s(self) -> None:
         """Update time loop state using MUSCLE3 connections"""
-        if self.t_cur >= self.last_equilibrium_call + self.equilibrium_interval:
+        # if self.t_cur >= self.last_equilibrium_call + self.equilibrium_interval:
+        if self.t_cur >= self.last_core_sources_call + self.equilibrium_interval:
             self.receive_equilibrium(port_name="s")
             self.receive_core_profiles(port_name="s")
             self.receive_core_sources(port_name="s")
@@ -188,8 +193,9 @@ class ToraxMuscleRunner:
         self.t_cur = self.sim_state.t
 
         if self.output_all_timeslices:
-            self.db_out.put_slice(self.get_equilibrium_ids())
-            self.db_out.put_slice(self.get_core_profiles_ids())
+            if self.t_cur >= self.last_core_sources_call + self.equilibrium_interval:
+                self.db_out.put_slice(self.get_equilibrium_ids())
+                self.db_out.put_slice(self.get_core_profiles_ids())
 
         if sim_error != SimError.NO_ERROR:
             raise RuntimeError(sim_error)
@@ -345,7 +351,7 @@ class ToraxMuscleRunner:
             and core_profiles_data.code.output_flag[0] == -1
         ):
             return
-
+        self.last_core_profiles_call = self.t_cur
         core_profiles_conditions = profile_conditions_from_IMAS(core_profiles_data)
         core_profiles_conditions["initial_psi_mode"] = "geometry"  
         self.torax_config.update_fields(
@@ -363,7 +369,7 @@ class ToraxMuscleRunner:
             "core_sources", port_name
         )
         self.update_t_next(t_next, port_name)
-
+        self.last_core_sources_call = self.t_cur
         # ignore this entry if input source didn't converge
         if (
             core_sources_data.code.output_flag
