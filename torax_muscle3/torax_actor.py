@@ -415,11 +415,8 @@ class ToraxMuscleRunner:
             core_profiles= self.sim_state.core_profiles,
         )
         dt = self.step_fn.time_step_calculator.next_dt(
-            self.sim_state.t,
             runtime_params_t,
-            geo_t,
-            self.sim_state.core_profiles,
-            self.sim_state.core_transport,
+            self.sim_state,
         )
         t_next = self.sim_state.t + dt
         if t_next >= self.t_final:
