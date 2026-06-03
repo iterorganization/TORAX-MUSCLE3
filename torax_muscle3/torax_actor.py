@@ -51,7 +51,6 @@ from torax_muscle3.utils import (
     merge_extra_vars,
 )
 
-import pdb 
 logger = logging.getLogger()
 
 
