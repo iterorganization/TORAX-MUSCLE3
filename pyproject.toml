@@ -50,8 +50,7 @@ dependencies = [
     "importlib_resources",
     "rich",
     "packaging",
-    # "torax[dev] @ git+https://github.com/google-deepmind/torax.git@main",
-    "torax[dev] @ git+https://github.com/google-deepmind/torax.git@imas_input_core_sources",
+    "torax[dev]==1.4.0",
     "imas-python",
     "muscle3==0.8.0",
 ]
