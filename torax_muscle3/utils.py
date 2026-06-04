@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, TypeVar, cast, TYPE_CHECKING
 import torax
 
 import numpy as np
-from imas.ids_toplevel import IDSToplevel
+from imas.ids_toplevel import IDSFactory, IDSToplevel
 from libmuscle import Instance
 from torax._src.geometry.imas import IMASConfig
 
@@ -104,3 +104,21 @@ def merge_extra_vars(
             "r_boundary_outline", equilibrium_data.time[0]
         )
     return equilibrium_data
+
+def create_light_equilibrium(equilibrium_data: IDSToplevel) -> IDSToplevel:
+    """Create a lighter equilibrium IDS  with only the fields needed for geometry. 
+
+    Useful to save memory since the full equilibrium can be large if it contains GGD and 2D Profiles. 
+    It can save a lot of time when processing multiple time slices.
+    """
+    light_equilibrium = IDSFactory().equilibrium()
+    light_equilibrium.ids_properties.homogeneous_time = 1
+    light_equilibrium.time = equilibrium_data.time
+    light_equilibrium.vacuum_toroidal_field = equilibrium_data.vacuum_toroidal_field
+    light_equilibrium.time_slice.resize(len(equilibrium_data.time_slice))
+    for i in range(len(light_equilibrium.time_slice)):
+        light_equilibrium.time_slice[i].time = equilibrium_data.time_slice[i].time
+        light_equilibrium.time_slice[i].profiles_1d = equilibrium_data.time_slice[i].profiles_1d
+        light_equilibrium.time_slice[i].boundary = equilibrium_data.time_slice[i].boundary
+        light_equilibrium.time_slice[i].global_quantities = equilibrium_data.time_slice[i].global_quantities
+    return light_equilibrium
