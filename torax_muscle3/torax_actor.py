@@ -243,20 +243,11 @@ class ToraxMuscleRunner:
 
     def receive_equilibrium(self, port_name: str) -> None:
         """Receive equilibrium IDS through MUSCLE3 connections"""
-        if not self.instance.is_connected(f"equilibrium_{port_name}"):
+        ids_data = self.receive_ids_data("equilibrium", port_name)
+        if ids_data is None:
+            # Ignore if port is not connected or if input source didn't converge.
             return
-        equilibrium_data, self.t_cur, t_next = self.receive_ids_data(
-            "equilibrium", port_name
-        )
-        self.update_t_next(t_next, port_name)
-
-        # if output_flag is -1 it means the code did not run successfully
-        # and the result should not be used
-        if (
-            equilibrium_data.code.output_flag
-            and equilibrium_data.code.output_flag[0] == -1
-        ):
-            return
+        equilibrium_data, self.t_cur = ids_data
 
         geometry_configs = {}
         torax_config_dict = get_geometry_config_dict(self.torax_config)
@@ -305,19 +296,11 @@ class ToraxMuscleRunner:
 
     def receive_core_profiles(self, port_name: str) -> None:
         """Receive core_profiles IDS through MUSCLE3 connections"""
-        if not self.instance.is_connected(f"core_profiles_{port_name}"):
+        ids_data = self.receive_ids_data("core_profiles", port_name)
+        if ids_data is None:
+            # Ignore if port is not connected or if input source didn't converge.
             return
-        core_profiles_data, self.t_cur, t_next = self.receive_ids_data(
-            "core_profiles", port_name
-        )
-        self.update_t_next(t_next, port_name)
-
-        # ignore this entry if input source didn't converge
-        if (
-            core_profiles_data.code.output_flag
-            and core_profiles_data.code.output_flag[0] == -1
-        ):
-            return
+        core_profiles_data, self.t_cur = ids_data
 
         core_profiles_conditions = profile_conditions_from_IMAS(core_profiles_data)
         self.torax_config.update_fields(
@@ -329,19 +312,11 @@ class ToraxMuscleRunner:
 
     def receive_core_sources(self, port_name: str) -> None:
         """Receive core_sources IDS through MUSCLE3 connections"""
-        if not self.instance.is_connected(f"core_sources_{port_name}"):
+        ids_data = self.receive_ids_data("core_sources", port_name)
+        if ids_data is None:
+            # Ignore if port is not connected or if input source didn't converge.
             return
-        core_sources_data, self.t_cur, t_next = self.receive_ids_data(
-            "core_sources", port_name
-        )
-        self.update_t_next(t_next, port_name)
-
-        # ignore this entry if input source didn't converge
-        if (
-            core_sources_data.code.output_flag
-            and core_sources_data.code.output_flag[0] == -1
-        ):
-            return
+        core_sources_data, self.t_cur = ids_data
 
         sources = sources_from_IMAS(core_sources_data)
         self.torax_config.update_fields(
@@ -356,13 +331,18 @@ class ToraxMuscleRunner:
     ) -> Tuple[IDSToplevel, float, Optional[float]]:
         """Receive IDS message through MUSCLE3"""
         if not self.instance.is_connected(f"{ids_name}_{port_name}"):
-            raise Warning("Calling receive while not connected")
+            return None
         msg = self.instance.receive(f"{ids_name}_{port_name}")
         t_cur = msg.timestamp
         t_next = msg.next_timestamp
         ids_data = getattr(IDSFactory(), ids_name)()
         ids_data.deserialize(msg.data)
-        return ids_data, t_cur, t_next
+
+        self.update_t_next(t_next, port_name)
+        # ignore this entry if input source didn't converge
+        if ids_data.code.output_flag and ids_data.code.output_flag[0] == -1:
+            return None
+        return ids_data, t_cur
 
     def send_ids(self, ids: IDSToplevel, ids_name: str, port_name: str) -> None:
         """Send IDS message through MUSCLE3"""
