@@ -49,6 +49,7 @@ from torax_muscle3.utils import (
     get_geometry_config_dict,
     get_setting_optional,
     merge_extra_vars,
+    create_light_equilibrium,
 )
 
 logger = logging.getLogger()
@@ -258,10 +259,10 @@ class ToraxMuscleRunner:
         geometry_configs = {}
         torax_config_dict = get_geometry_config_dict(self.torax_config)
         torax_config_dict["geometry_type"] = "imas"
-
+        light_equilibrium = create_light_equilibrium(equilibrium_data)        
         with DBEntry("imas:memory?path=/", "w") as db:
-            db.put(equilibrium_data)
-            for t in equilibrium_data.time:
+            db.put(light_equilibrium)
+            for t in light_equilibrium.time:
                 my_slice = db.get_slice(
                     ids_name="equilibrium",
                     time_requested=t,
