@@ -30,6 +30,7 @@ Available Settings
 * Optional
 
   - **output_all_timeslices**: (string) IMAS Data Dictionary version number to which data will be converted. Defaults to original dd_version of the data.
+  - **communication_interval**: (float) time interval at which to send/receive data through MUSCLE3 connections. Common to all connected ports. Defaults to 1e-6 seconds.
 
 Available Ports
 ---------------

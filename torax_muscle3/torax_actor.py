@@ -40,6 +40,7 @@ from torax._src.geometry.imas import IMASConfig
 from torax._src.geometry.pydantic_model import GeometryConfig
 from torax._src.imas_tools.input.core_sources import sources_from_IMAS
 from torax._src.imas_tools.input.core_profiles import profile_conditions_from_IMAS
+from torax._src.imas_tools.input.core_sources import sources_from_IMAS
 from torax._src.imas_tools.output.core_profiles import core_profiles_to_IMAS
 from torax._src.imas_tools.output.equilibrium import torax_state_to_imas_equilibrium
 from ymmsl import Operator
@@ -66,7 +67,7 @@ class ToraxMuscleRunner:
     """IMAS DBEntry for gathering the timeslices if output_all_timeslices is True"""
     torax_config: ToraxConfig
     """ToraxConfig object"""
-    equilibrium_interval = None
+    communication_interval: Optional[float] = None
     """Interval for communication through MUSCLE3 ports"""
     step_fn: SimulationStepFn
     """Torax step_function object"""
@@ -88,9 +89,8 @@ class ToraxMuscleRunner:
     """Next expected final output timestamp for reuse_instance loop"""
     finished: bool = False
     """Whether the run_sim function has been run fully"""
-    last_equilibrium_call = -np.inf
+    last_communication: float = -np.inf
     """Last timestamp for which the MUSCLE3 communication was done"""
-
     def __init__(self) -> None:
         self.get_instance()
         self.extra_var_col = ExtraVarCollection()
@@ -116,8 +116,8 @@ class ToraxMuscleRunner:
 
     def run_prep(self) -> None:
         """Prepare a TORAX simulation based on torax config and MUSCLE3 settings"""
-        self.equilibrium_interval = get_setting_optional(
-            self.instance, "equilibrium_interval", 1e-6
+        self.communication_interval = get_setting_optional(
+            self.instance, "communication_interval", 1e-6
         )
         self.output_all_timeslices = get_setting_optional(
             self.instance, "output_all_timeslices", False
@@ -159,7 +159,8 @@ class ToraxMuscleRunner:
     def run_o_i(self) -> None:
         """Send out time loop state using MUSCLE3 connections"""
         self.t_next_inner = self.get_t_next()
-        if self.t_cur >= self.last_equilibrium_call + self.equilibrium_interval:
+        if self.t_cur >= self.last_communication + self.communication_interval:
+            self.last_communication = self.t_cur
             if self.instance.is_connected("equilibrium_o_i"):
                 self.send_ids(self.get_equilibrium_ids(), "equilibrium", "o_i")
             if self.instance.is_connected("core_profiles_o_i"):
@@ -167,7 +168,7 @@ class ToraxMuscleRunner:
 
     def run_s(self) -> None:
         """Update time loop state using MUSCLE3 connections"""
-        if self.t_cur >= self.last_equilibrium_call + self.equilibrium_interval:
+        if self.t_cur >= self.last_communication + self.communication_interval:
             self.receive_equilibrium(port_name="s")
             self.receive_core_profiles(port_name="s")
             self.receive_core_sources(port_name="s")
@@ -191,8 +192,9 @@ class ToraxMuscleRunner:
             return
 
         if self.output_all_timeslices:
-            self.db_out.put_slice(self.get_equilibrium_ids())
-            self.db_out.put_slice(self.get_core_profiles_ids())
+            if self.t_cur >= self.last_communication + self.last_communication_interval:
+                self.db_out.put_slice(self.get_equilibrium_ids())
+                self.db_out.put_slice(self.get_core_profiles_ids())
 
     def run_o_f(self) -> None:
         """Send out final state using MUSCLE3 connections"""
@@ -295,7 +297,6 @@ class ToraxMuscleRunner:
                 )
         # temp extra vars code
         self.extra_var_col.pad_extra_vars()
-        self.last_equilibrium_call = self.t_cur
         self.geometry_provider = torax_experimental.geometry.Geometry.from_dict(
             {
                 "geometry_type": geometry.GeometryType.IMAS,
@@ -318,10 +319,36 @@ class ToraxMuscleRunner:
             and core_profiles_data.code.output_flag[0] == -1
         ):
             return
-
         core_profiles_conditions = profile_conditions_from_IMAS(core_profiles_data)
         self.torax_config.update_fields(
             {"profile_conditions": core_profiles_conditions}
+        )
+        self.runtime_params_provider = RuntimeParamsProvider.from_config(
+            self.torax_config
+        )
+    
+    def receive_core_sources(self, port_name: str) -> None:
+        """Receive core_sources IDS through MUSCLE3 connections"""
+        if not self.instance.is_connected(f"core_sources_{port_name}"):
+            return
+        core_sources_data, self.t_cur, t_next = self.receive_ids_data(
+            "core_sources", port_name
+        )
+        self.update_t_next(t_next, port_name)
+        self.last_core_sources_call = self.t_cur
+        # ignore this entry if input source didn't converge
+        if (
+            core_sources_data.code.output_flag
+            and core_sources_data.code.output_flag[0] == -1
+        ):
+            return
+
+        sources = sources_from_IMAS(core_sources_data)
+        # Currently creates problem with icrh: tries to load TORIC. See why.
+        # del sources['icrh']
+        # exit()
+        self.torax_config.update_fields(
+            {f"sources.{key}": value for key, value in sources.items()}
         )
         self.runtime_params_provider = RuntimeParamsProvider.from_config(
             self.torax_config
