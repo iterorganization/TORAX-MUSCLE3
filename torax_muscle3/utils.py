@@ -8,7 +8,8 @@ from typing import Any, Dict, List, Optional, TypeVar, cast, TYPE_CHECKING
 import torax
 
 import numpy as np
-from imas.ids_toplevel import IDSFactory, IDSToplevel
+from imas.ids_toplevel import IDSToplevel
+from imas import IDSFactory
 from libmuscle import Instance
 from torax._src.geometry.imas import IMASConfig
 
