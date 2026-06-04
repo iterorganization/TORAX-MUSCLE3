@@ -30,6 +30,7 @@ Available Settings
 * Optional
 
   - **output_all_timeslices**: (string) IMAS Data Dictionary version number to which data will be converted. Defaults to original dd_version of the data.
+  - **use_IDS_plasma_composition**: (bool) whether to use plasma composition from input core_profiles IDS on f_init or from TORAX config. Defaults to False (i.e. use TORAX config).
 
 Available Ports
 ---------------

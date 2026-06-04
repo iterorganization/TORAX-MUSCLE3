@@ -68,6 +68,8 @@ class ToraxMuscleRunner:
     """ToraxConfig object"""
     equilibrium_interval = None
     """Interval for communication through MUSCLE3 ports"""
+    use_IDS_plasma_composition = None
+    """Whether to use plasma composition from input core_profiles IDS on f_init or from TORAX config"""
     step_fn: SimulationStepFn
     """Torax step_function object"""
     geometry_provider: torax_experimental.geometry.StandardGeometryProvider
@@ -119,6 +121,9 @@ class ToraxMuscleRunner:
         )
         self.output_all_timeslices = get_setting_optional(
             self.instance, "output_all_timeslices", False
+        )
+        self.use_IDS_plasma_composition = get_setting_optional(
+            self.instance, "use_IDS_plasma_composition", False
         )
         if self.output_all_timeslices:
             self.db_out = DBEntry("imas:memory?path=/db_out/", "w")
@@ -314,9 +319,8 @@ class ToraxMuscleRunner:
             and core_profiles_data.code.output_flag[0] == -1
         ):
             return
-        if port_name == "f_init":
-            # Initialize TORAX config with input plasma composition from core_profiles. Might require preprocessing 
-            # if the ions names are not filled or not correctly. 
+        if port_name == "f_init" and self.use_IDS_plasma_composition == True:
+            # Update TORAX config with input plasma composition from received core_profiles IDS. 
             plasma_composition = plasma_composition_from_IMAS(core_profiles_data, main_ions_symbols=["H"])
             self.torax_config.update_fields({"plasma_composition": plasma_composition})
 
