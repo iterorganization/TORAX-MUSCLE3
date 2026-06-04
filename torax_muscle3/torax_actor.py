@@ -108,6 +108,8 @@ class ToraxMuscleRunner:
                 self.run_o_i()
                 self.run_s()
                 self.run_timestep()
+                if self.finished:
+                    break
             self.run_o_f()
 
         self.finished = True
@@ -170,7 +172,6 @@ class ToraxMuscleRunner:
             self.receive_core_profiles(port_name="s")
             self.receive_core_sources(port_name="s")
 
-
     def run_timestep(self) -> None:
         """Evolve time loop state using the TORAX step function"""
         self.sim_state, self.post_processed_outputs = self.step_fn(
@@ -185,12 +186,13 @@ class ToraxMuscleRunner:
         )
         self.t_cur = self.sim_state.t
 
+        if sim_error != SimError.NO_ERROR:
+            self.finished = True
+            return
+
         if self.output_all_timeslices:
             self.db_out.put_slice(self.get_equilibrium_ids())
             self.db_out.put_slice(self.get_core_profiles_ids())
-
-        if sim_error != SimError.NO_ERROR:
-            raise RuntimeError(sim_error)
 
     def run_o_f(self) -> None:
         """Send out final state using MUSCLE3 connections"""
@@ -259,7 +261,7 @@ class ToraxMuscleRunner:
         geometry_configs = {}
         torax_config_dict = get_geometry_config_dict(self.torax_config)
         torax_config_dict["geometry_type"] = "imas"
-        light_equilibrium = create_light_equilibrium(equilibrium_data)        
+        light_equilibrium = create_light_equilibrium(equilibrium_data)
         with DBEntry("imas:memory?path=/", "w") as db:
             db.put(light_equilibrium)
             for t in light_equilibrium.time:
@@ -268,6 +270,8 @@ class ToraxMuscleRunner:
                     time_requested=t,
                     interpolation_method=CLOSEST_INTERP,
                 )
+                if my_slice.code.output_flag and my_slice.code.output_flag[0] == -1:
+                    continue
                 config_kwargs = {
                     **torax_config_dict,
                     "equilibrium_object": my_slice,
@@ -322,7 +326,7 @@ class ToraxMuscleRunner:
         self.runtime_params_provider = RuntimeParamsProvider.from_config(
             self.torax_config
         )
-    
+
     def receive_core_sources(self, port_name: str) -> None:
         """Receive core_sources IDS through MUSCLE3 connections"""
         if not self.instance.is_connected(f"core_sources_{port_name}"):
@@ -338,7 +342,7 @@ class ToraxMuscleRunner:
             and core_sources_data.code.output_flag[0] == -1
         ):
             return
-        
+
         sources = sources_from_IMAS(core_sources_data)
         self.torax_config.update_fields(
             {f"sources.{key}": value for key, value in sources.items()}
@@ -377,7 +381,7 @@ class ToraxMuscleRunner:
             t=self.sim_state.t,
             runtime_params_provider=self.runtime_params_provider,
             geometry_provider=self.geometry_provider,
-            core_profiles= self.sim_state.core_profiles,
+            core_profiles=self.sim_state.core_profiles,
         )
         dt = self.step_fn.time_step_calculator.next_dt(
             runtime_params_t,
