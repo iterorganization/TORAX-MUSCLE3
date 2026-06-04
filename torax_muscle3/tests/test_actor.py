@@ -188,7 +188,7 @@ YMMSL_INNER_CORE_SOURCES = YMMSL_INNER_TEMPLATE.replace("IDS_NAME", "core_source
 @pytest.mark.filterwarnings("ignore:.*use of fork():DeprecationWarning")
 def test_actor(tmp_path, monkeypatch, ymmsl_text):
     monkeypatch.chdir(tmp_path)
-    
+
     if "core_sources" in ymmsl_text:
         filename = "core_sources_ddv4.nc"
     else:
