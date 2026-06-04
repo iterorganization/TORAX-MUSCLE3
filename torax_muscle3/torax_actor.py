@@ -183,7 +183,6 @@ class ToraxMuscleRunner:
         self.t_cur = self.sim_state.t
 
         if sim_error != SimError.NO_ERROR:
-            raise RuntimeError(sim_error)
             self.finished = True
             return
 
@@ -261,7 +260,7 @@ class ToraxMuscleRunner:
 
         with DBEntry("imas:memory?path=/", "w") as db:
             db.put(equilibrium_data)
-            for i, t in enumerate(equilibrium_data.time):
+            for t in equilibrium_data.time:
                 my_slice = db.get_slice(
                     ids_name="equilibrium",
                     time_requested=t,
