@@ -67,7 +67,7 @@ class ToraxMuscleRunner:
     """IMAS DBEntry for gathering the timeslices if output_all_timeslices is True"""
     torax_config: ToraxConfig
     """ToraxConfig object"""
-    equilibrium_interval = None
+    communication_interval: Optional[float] = None
     """Interval for communication through MUSCLE3 ports"""
     step_fn: SimulationStepFn
     """Torax step_function object"""
@@ -89,7 +89,7 @@ class ToraxMuscleRunner:
     """Next expected final output timestamp for reuse_instance loop"""
     finished: bool = False
     """Whether the run_sim function has been run fully"""
-    last_communication = -np.inf
+    last_communication: float = -np.inf
     """Last timestamp for which the MUSCLE3 communication was done"""
     def __init__(self) -> None:
         self.get_instance()
