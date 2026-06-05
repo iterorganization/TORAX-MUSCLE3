@@ -66,7 +66,7 @@ class ToraxMuscleRunner:
     """IMAS DBEntry for gathering the timeslices if output_all_timeslices is True"""
     torax_config: ToraxConfig
     """ToraxConfig object"""
-    communication_interval: Optional[float] = None
+    communication_interval: float
     """Interval for communication through MUSCLE3 ports"""
     step_fn: SimulationStepFn
     """Torax step_function object"""
@@ -193,7 +193,7 @@ class ToraxMuscleRunner:
             return
 
         if self.output_all_timeslices:
-            if self.t_cur >= self.last_communication + self.last_communication_interval:
+            if self.t_cur >= self.last_communication + self.communication_interval:
                 self.db_out.put_slice(self.get_equilibrium_ids())
                 self.db_out.put_slice(self.get_core_profiles_ids())
 
