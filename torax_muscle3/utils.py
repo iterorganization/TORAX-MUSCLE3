@@ -111,6 +111,7 @@ def get_setting_optional(
         setting = default
     return setting
 
+
 def merge_extra_vars(
     equilibrium_data: IDSToplevel, extra_var_col: ExtraVarCollection
 ) -> IDSToplevel:
