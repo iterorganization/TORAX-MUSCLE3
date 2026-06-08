@@ -40,7 +40,6 @@ from torax._src.geometry.imas import IMASConfig
 from torax._src.geometry.pydantic_model import GeometryConfig
 from torax._src.imas_tools.input.core_sources import sources_from_IMAS
 from torax._src.imas_tools.input.core_profiles import profile_conditions_from_IMAS
-from torax._src.imas_tools.input.core_sources import sources_from_IMAS
 from torax._src.imas_tools.output.core_profiles import core_profiles_to_IMAS
 from torax._src.imas_tools.output.equilibrium import torax_state_to_imas_equilibrium
 from ymmsl import Operator
@@ -67,7 +66,7 @@ class ToraxMuscleRunner:
     """IMAS DBEntry for gathering the timeslices if output_all_timeslices is True"""
     torax_config: ToraxConfig
     """ToraxConfig object"""
-    communication_interval: Optional[float] = None
+    communication_interval: float
     """Interval for communication through MUSCLE3 ports"""
     step_fn: SimulationStepFn
     """Torax step_function object"""
@@ -91,6 +90,7 @@ class ToraxMuscleRunner:
     """Whether the run_sim function has been run fully"""
     last_communication: float = -np.inf
     """Last timestamp for which the MUSCLE3 communication was done"""
+
     def __init__(self) -> None:
         self.get_instance()
         self.extra_var_col = ExtraVarCollection()
@@ -129,6 +129,7 @@ class ToraxMuscleRunner:
         self.torax_config = build_torax_config_from_file(
             path=config_module_str,
         )
+        self.fix_ymmsl_settings()
         self.geometry_provider = self.torax_config.geometry.build_provider
         self.runtime_params_provider = RuntimeParamsProvider.from_config(
             self.torax_config
@@ -192,7 +193,7 @@ class ToraxMuscleRunner:
             return
 
         if self.output_all_timeslices:
-            if self.t_cur >= self.last_communication + self.last_communication_interval:
+            if self.t_cur >= self.last_communication + self.communication_interval:
                 self.db_out.put_slice(self.get_equilibrium_ids())
                 self.db_out.put_slice(self.get_core_profiles_ids())
 
@@ -326,33 +327,6 @@ class ToraxMuscleRunner:
         self.runtime_params_provider = RuntimeParamsProvider.from_config(
             self.torax_config
         )
-    
-    def receive_core_sources(self, port_name: str) -> None:
-        """Receive core_sources IDS through MUSCLE3 connections"""
-        if not self.instance.is_connected(f"core_sources_{port_name}"):
-            return
-        core_sources_data, self.t_cur, t_next = self.receive_ids_data(
-            "core_sources", port_name
-        )
-        self.update_t_next(t_next, port_name)
-        self.last_core_sources_call = self.t_cur
-        # ignore this entry if input source didn't converge
-        if (
-            core_sources_data.code.output_flag
-            and core_sources_data.code.output_flag[0] == -1
-        ):
-            return
-
-        sources = sources_from_IMAS(core_sources_data)
-        # Currently creates problem with icrh: tries to load TORIC. See why.
-        # del sources['icrh']
-        # exit()
-        self.torax_config.update_fields(
-            {f"sources.{key}": value for key, value in sources.items()}
-        )
-        self.runtime_params_provider = RuntimeParamsProvider.from_config(
-            self.torax_config
-        )
 
     def receive_core_sources(self, port_name: str) -> None:
         """Receive core_sources IDS through MUSCLE3 connections"""
@@ -425,6 +399,16 @@ class ToraxMuscleRunner:
             self.t_next_outer = t_next
         elif port_name == "s":
             self.t_next_inner = t_next
+
+    def fix_ymmsl_settings(self) -> None:
+        for numerics_setting in [
+            "t_initial",
+            "t_final",
+            "fixed_dt",
+        ]:
+            var = get_setting_optional(self.instance, numerics_setting, None)
+            if var is not None:
+                self.torax_config.update_fields({f"numerics.{numerics_setting}": var})
 
 
 def main() -> None:
