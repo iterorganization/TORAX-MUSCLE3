@@ -11,9 +11,10 @@ Last (for sure) compatible torax commit: 4b76ef0566
 """
 
 import logging
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Any, Union
 import os
 import pathlib
+import enum
 
 import numpy as np
 from imas import DBEntry, IDSFactory
@@ -60,10 +61,11 @@ from torax_muscle3.utils import (
 
 logger = logging.getLogger()
 
-import enum
 
-def serialize_equilibrium_objects(data, key=None):
-    if key == 'equilibrium_object':
+def serialize_equilibrium_objects(
+    data: Any, key: Optional[Union[str, float]] = None
+) -> Any:
+    if key == "equilibrium_object":
         return serialize_equilibrium_objects(data.serialize())
     elif isinstance(data, enum.Enum):
         return data.value
@@ -71,8 +73,7 @@ def serialize_equilibrium_objects(data, key=None):
         return serialize_equilibrium_objects(list(data))
     elif isinstance(data, dict):
         return {
-            str(k): serialize_equilibrium_objects(v, key=k)
-            for k, v in data.items()
+            str(k): serialize_equilibrium_objects(v, key=k) for k, v in data.items()
         }
     elif isinstance(data, list):
         return [serialize_equilibrium_objects(item) for item in data]
@@ -82,8 +83,11 @@ def serialize_equilibrium_objects(data, key=None):
         return str(data)
     return data
 
-def deserialize_equilibrium_objects(data, key=None):
-    if key == 'equilibrium_object':
+
+def deserialize_equilibrium_objects(
+    data: Any, key: Optional[Union[str, float]] = None
+) -> Any:
+    if key == "equilibrium_object":
         eq = IDSFactory().equilibrium()
         eq.deserialize(data)
         return eq
@@ -97,6 +101,7 @@ def deserialize_equilibrium_objects(data, key=None):
     elif isinstance(data, tuple):
         return tuple(deserialize_equilibrium_objects(item) for item in data)
     return data
+
 
 class ToraxMuscleRunner:
     """Object for running torax simulation"""
@@ -175,7 +180,6 @@ class ToraxMuscleRunner:
         self.t_next_outer = msg.data[0]["t_next_outer"]
         self.finished = msg.data[0]["finished"]
         self.last_communication = msg.data[0]["last_communication"]
-        beep = deserialize_equilibrium_objects(msg.data[0]["torax_config"])
         self.torax_config = ToraxConfig.from_dict(
             deserialize_equilibrium_objects(msg.data[0]["torax_config"])
         )
@@ -233,26 +237,36 @@ class ToraxMuscleRunner:
             output_file = os.path.abspath(output_file)
             # store current torax_config
             # send message
-            my_torax_config = serialize_equilibrium_objects(self.torax_config.model_dump())
-            data = [{
-                "first_run": bool(self.first_run),
-                "t_cur": float(self.t_cur),
-                "t_final": float(self.t_final),
-                "t_next_inner": float(self.t_next_inner) if self.t_next_inner is not None else None,
-                "t_next_outer": float(self.t_next_outer) if self.t_next_outer is not None else None,
-                "finished": self.finished,
-                "last_communication": float(self.last_communication) if self.last_communication is not None else None,
-                "netcdf_path": output_file,
-                "torax_config": my_torax_config,
-                "extra_var_col": self.extra_var_col.model_dump(),
-                "db_out": {
-                    ids_name: self.db_out.get(ids_name).serialize()
-                    for ids_name in [
-                        port.replace("_o_f", "")
-                        for port in get_port_list(self.instance, Operator.O_F)
-                    ]
-                },
-            }]
+            my_torax_config = serialize_equilibrium_objects(
+                self.torax_config.model_dump()
+            )
+            data = [
+                {
+                    "first_run": bool(self.first_run),
+                    "t_cur": float(self.t_cur),
+                    "t_final": float(self.t_final),
+                    "t_next_inner": float(self.t_next_inner)
+                    if self.t_next_inner is not None
+                    else None,
+                    "t_next_outer": float(self.t_next_outer)
+                    if self.t_next_outer is not None
+                    else None,
+                    "finished": self.finished,
+                    "last_communication": float(self.last_communication)
+                    if self.last_communication is not None
+                    else None,
+                    "netcdf_path": output_file,
+                    "torax_config": my_torax_config,
+                    "extra_var_col": self.extra_var_col.model_dump(),
+                    "db_out": {
+                        ids_name: self.db_out.get(ids_name).serialize()
+                        for ids_name in [
+                            port.replace("_o_f", "")
+                            for port in get_port_list(self.instance, Operator.O_F)
+                        ]
+                    },
+                }
+            ]
             msg = Message(float(self.t_cur), data=data)
             self.instance.save_snapshot(msg)
 

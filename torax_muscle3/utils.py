@@ -119,17 +119,13 @@ def merge_extra_vars(
     equilibrium_data: IDSToplevel, extra_var_col: ExtraVarCollection
 ) -> IDSToplevel:
     if "z_boundary_outline" in extra_var_col.extra_var_dirs.keys():
-        my_arr = extra_var_col.get_val(
-            "z_boundary_outline", equilibrium_data.time[0]
-        )
+        my_arr = extra_var_col.get_val("z_boundary_outline", equilibrium_data.time[0])
         if isinstance(my_arr, Grid):
             equilibrium_data.time_slice[0].boundary.outline.z = my_arr.array
         else:
             equilibrium_data.time_slice[0].boundary.outline.z = my_arr
     if "r_boundary_outline" in extra_var_col.extra_var_dirs.keys():
-        my_arr = extra_var_col.get_val(
-            "r_boundary_outline", equilibrium_data.time[0]
-        )
+        my_arr = extra_var_col.get_val("r_boundary_outline", equilibrium_data.time[0])
         if isinstance(my_arr, Grid):
             equilibrium_data.time_slice[0].boundary.outline.r = my_arr.array
         else:
