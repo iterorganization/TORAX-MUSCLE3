@@ -264,7 +264,9 @@ class ToraxMuscleRunner:
                             port.replace("_o_f", "")
                             for port in get_port_list(self.instance, Operator.O_F)
                         ]
-                    },
+                    }
+                    if self.output_all_timeslices
+                    else None,
                 }
             ]
             msg = Message(float(self.t_cur), data=data)
