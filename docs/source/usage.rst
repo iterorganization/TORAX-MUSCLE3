@@ -40,7 +40,7 @@ Available Ports
 ---------------
 
 The Torax actor currently only has IDS coupling functionality for both input and output for the following IDSs:
-[equilibrium, core_profiles].
+[equilibrium, core_profiles], and for output only for [core_sources].
 
 * Optional
 
