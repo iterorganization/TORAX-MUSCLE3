@@ -4,7 +4,7 @@ Utility functions for muscle3 and torax.
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, TypeVar, cast, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, TypeVar, cast, TYPE_CHECKING, overload
 import torax
 
 import numpy as np
@@ -81,8 +81,27 @@ def get_geometry_config_dict(config: torax.ToraxConfig) -> dict:
     return config_dict
 
 
+@overload
 def get_setting_optional(
-    instance: Instance, setting_name: str, default: Optional[TSetting] = None
+    instance: Instance,
+    setting_name: str,
+    default: None = None,
+) -> TSetting | None: ...
+
+
+@overload
+def get_setting_optional(
+    instance: Instance,
+    setting_name: str,
+    default: TSetting,
+) -> TSetting: ...
+
+
+# it may be a nice proposal for the m3 api
+def get_setting_optional(
+    instance: Instance,
+    setting_name: str,
+    default: Optional[TSetting] = None,
 ) -> Optional[TSetting]:
     """Helper function to get optional settings from instance"""
     setting: Optional[TSetting]

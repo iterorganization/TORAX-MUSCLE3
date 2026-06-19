@@ -66,7 +66,7 @@ class ToraxMuscleRunner:
     """IMAS DBEntry for gathering the timeslices if output_all_timeslices is True"""
     torax_config: ToraxConfig
     """ToraxConfig object"""
-    equilibrium_interval = None
+    communication_interval: float
     """Interval for communication through MUSCLE3 ports"""
     step_fn: SimulationStepFn
     """Torax step_function object"""
@@ -88,7 +88,7 @@ class ToraxMuscleRunner:
     """Next expected final output timestamp for reuse_instance loop"""
     finished: bool = False
     """Whether the run_sim function has been run fully"""
-    last_equilibrium_call = -np.inf
+    last_communication: float = -np.inf
     """Last timestamp for which the MUSCLE3 communication was done"""
 
     def __init__(self) -> None:
@@ -116,8 +116,8 @@ class ToraxMuscleRunner:
 
     def run_prep(self) -> None:
         """Prepare a TORAX simulation based on torax config and MUSCLE3 settings"""
-        self.equilibrium_interval = get_setting_optional(
-            self.instance, "equilibrium_interval", 1e-6
+        self.communication_interval = get_setting_optional(
+            self.instance, "communication_interval", 1e-6
         )
         self.output_all_timeslices = get_setting_optional(
             self.instance, "output_all_timeslices", False
@@ -129,6 +129,7 @@ class ToraxMuscleRunner:
         self.torax_config = build_torax_config_from_file(
             path=config_module_str,
         )
+        self.fix_ymmsl_settings()
         self.geometry_provider = self.torax_config.geometry.build_provider
         self.runtime_params_provider = RuntimeParamsProvider.from_config(
             self.torax_config
@@ -159,7 +160,8 @@ class ToraxMuscleRunner:
     def run_o_i(self) -> None:
         """Send out time loop state using MUSCLE3 connections"""
         self.t_next_inner = self.get_t_next()
-        if self.t_cur >= self.last_equilibrium_call + self.equilibrium_interval:
+        if self.t_cur >= self.last_communication + self.communication_interval:
+            self.last_communication = self.t_cur
             if self.instance.is_connected("equilibrium_o_i"):
                 self.send_ids(self.get_equilibrium_ids(), "equilibrium", "o_i")
             if self.instance.is_connected("core_profiles_o_i"):
@@ -167,7 +169,7 @@ class ToraxMuscleRunner:
 
     def run_s(self) -> None:
         """Update time loop state using MUSCLE3 connections"""
-        if self.t_cur >= self.last_equilibrium_call + self.equilibrium_interval:
+        if self.t_cur >= self.last_communication + self.communication_interval:
             self.receive_equilibrium(port_name="s")
             self.receive_core_profiles(port_name="s")
             self.receive_core_sources(port_name="s")
@@ -191,8 +193,9 @@ class ToraxMuscleRunner:
             return
 
         if self.output_all_timeslices:
-            self.db_out.put_slice(self.get_equilibrium_ids())
-            self.db_out.put_slice(self.get_core_profiles_ids())
+            if self.t_cur >= self.last_communication + self.communication_interval:
+                self.db_out.put_slice(self.get_equilibrium_ids())
+                self.db_out.put_slice(self.get_core_profiles_ids())
 
     def run_o_f(self) -> None:
         """Send out final state using MUSCLE3 connections"""
@@ -286,7 +289,6 @@ class ToraxMuscleRunner:
                 )
         # temp extra vars code
         self.extra_var_col.pad_extra_vars()
-        self.last_equilibrium_call = self.t_cur
         self.geometry_provider = torax_experimental.geometry.Geometry.from_dict(
             {
                 "geometry_type": geometry.GeometryType.IMAS,
@@ -378,6 +380,16 @@ class ToraxMuscleRunner:
             self.t_next_outer = t_next
         elif port_name == "s":
             self.t_next_inner = t_next
+
+    def fix_ymmsl_settings(self) -> None:
+        for numerics_setting in [
+            "t_initial",
+            "t_final",
+            "fixed_dt",
+        ]:
+            var = get_setting_optional(self.instance, numerics_setting, None)
+            if var is not None:
+                self.torax_config.update_fields({f"numerics.{numerics_setting}": var})
 
 
 def main() -> None:
