@@ -127,8 +127,6 @@ class ToraxMuscleRunner:
         self.use_IDS_plasma_composition = get_setting_optional(
             self.instance, "use_IDS_plasma_composition", False
         )
-        if self.output_all_timeslices:
-            self.db_out = DBEntry("imas:memory?path=/db_out/", "w")
         # load config file from path
         config_module_str = self.instance.get_setting("python_config_module")
         self.torax_config = build_torax_config_from_file(
@@ -157,8 +155,10 @@ class ToraxMuscleRunner:
             self.t_final = self.step_fn.runtime_params_provider.numerics.t_final
         self.t_cur = self.sim_state.t
         self.first_run = False
+        self.last_communication = -np.inf
 
         if self.output_all_timeslices:
+            self.db_out = DBEntry("imas:memory?path=/db_out/", "w")
             self.db_out.put_slice(self.get_equilibrium_ids())
             self.db_out.put_slice(self.get_core_profiles_ids())
 
