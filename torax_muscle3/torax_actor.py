@@ -309,12 +309,6 @@ class ToraxMuscleRunner:
             return
         core_profiles_data, self.t_cur = ids_data
 
-        # ignore this entry if input source didn't converge
-        if (
-            core_profiles_data.code.output_flag
-            and core_profiles_data.code.output_flag[0] == -1
-        ):
-            return
         if port_name == "f_init" and self.use_IDS_plasma_composition == True:
             # Update TORAX config with input plasma composition from received core_profiles IDS. 
             plasma_composition = plasma_composition_from_IMAS(core_profiles_data, main_ions_symbols=["H"])
