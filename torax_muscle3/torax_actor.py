@@ -39,7 +39,7 @@ from torax._src.geometry import geometry
 from torax._src.geometry.imas import IMASConfig
 from torax._src.geometry.pydantic_model import GeometryConfig
 from torax._src.imas_tools.input.core_sources import sources_from_IMAS
-from torax._src.imas_tools.input.core_profiles import profile_conditions_from_IMAS
+from torax._src.imas_tools.input.core_profiles import profile_conditions_from_IMAS, plasma_composition_from_IMAS
 from torax._src.imas_tools.output.core_profiles import core_profiles_to_IMAS
 from torax._src.imas_tools.output.equilibrium import torax_state_to_imas_equilibrium
 from ymmsl import Operator
@@ -68,6 +68,8 @@ class ToraxMuscleRunner:
     """ToraxConfig object"""
     communication_interval: float
     """Interval for communication through MUSCLE3 ports"""
+    use_IDS_plasma_composition = None
+    """Whether to use plasma composition from input core_profiles IDS on f_init or from TORAX config"""
     step_fn: SimulationStepFn
     """Torax step_function object"""
     geometry_provider: torax_experimental.geometry.StandardGeometryProvider
@@ -121,6 +123,9 @@ class ToraxMuscleRunner:
         )
         self.output_all_timeslices = get_setting_optional(
             self.instance, "output_all_timeslices", False
+        )
+        self.use_IDS_plasma_composition = get_setting_optional(
+            self.instance, "use_IDS_plasma_composition", False
         )
         if self.output_all_timeslices:
             self.db_out = DBEntry("imas:memory?path=/db_out/", "w")
@@ -303,6 +308,17 @@ class ToraxMuscleRunner:
             # Ignore if port is not connected or if input source didn't converge.
             return
         core_profiles_data, self.t_cur = ids_data
+
+        # ignore this entry if input source didn't converge
+        if (
+            core_profiles_data.code.output_flag
+            and core_profiles_data.code.output_flag[0] == -1
+        ):
+            return
+        if port_name == "f_init" and self.use_IDS_plasma_composition == True:
+            # Update TORAX config with input plasma composition from received core_profiles IDS. 
+            plasma_composition = plasma_composition_from_IMAS(core_profiles_data, main_ions_symbols=["H"])
+            self.torax_config.update_fields({"plasma_composition": plasma_composition})
 
         core_profiles_conditions = profile_conditions_from_IMAS(core_profiles_data)
         self.torax_config.update_fields(
