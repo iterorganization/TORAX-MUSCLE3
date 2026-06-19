@@ -39,7 +39,10 @@ from torax._src.geometry import geometry
 from torax._src.geometry.imas import IMASConfig
 from torax._src.geometry.pydantic_model import GeometryConfig
 from torax._src.imas_tools.input.core_sources import sources_from_IMAS
-from torax._src.imas_tools.input.core_profiles import profile_conditions_from_IMAS, plasma_composition_from_IMAS
+from torax._src.imas_tools.input.core_profiles import (
+    profile_conditions_from_IMAS,
+    plasma_composition_from_IMAS,
+)
 from torax._src.imas_tools.output.core_profiles import core_profiles_to_IMAS
 from torax._src.imas_tools.output.equilibrium import torax_state_to_imas_equilibrium
 from ymmsl import Operator
@@ -219,9 +222,7 @@ class ToraxMuscleRunner:
         coupled_ids_names = ["equilibrium", "core_profiles", "core_sources"]
         self.instance = Instance(
             {
-                Operator.F_INIT: [
-                    f"{ids_name}_in_f" for ids_name in coupled_ids_names
-                ],
+                Operator.F_INIT: [f"{ids_name}_in_f" for ids_name in coupled_ids_names],
                 Operator.O_I: [f"{ids_name}_out_i" for ids_name in coupled_ids_names],
                 Operator.S: [f"{ids_name}_in_s" for ids_name in coupled_ids_names],
                 Operator.O_F: [f"{ids_name}_out_f" for ids_name in coupled_ids_names],
@@ -309,9 +310,11 @@ class ToraxMuscleRunner:
             return
         core_profiles_data, self.t_cur = ids_data
 
-        if port_name == "in_f" and self.use_IDS_plasma_composition == True:
-            # Update TORAX config with input plasma composition from received core_profiles IDS. 
-            plasma_composition = plasma_composition_from_IMAS(core_profiles_data, main_ions_symbols=["H"])
+        if port_name == "in_f" and self.use_IDS_plasma_composition:
+            # Update TORAX config with input plasma composition from received core_profiles IDS.
+            plasma_composition = plasma_composition_from_IMAS(
+                core_profiles_data, main_ions_symbols=["H"]
+            )
             self.torax_config.update_fields({"plasma_composition": plasma_composition})
 
         core_profiles_conditions = profile_conditions_from_IMAS(core_profiles_data)
