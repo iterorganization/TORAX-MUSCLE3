@@ -142,10 +142,10 @@ class ToraxMuscleRunner:
 
     def run_f_init(self) -> None:
         """Initialize the actor state before the time loop using MUSCLE3 connections"""
-        self.receive_equilibrium(port_name="f_init")
-        self.receive_core_profiles(port_name="f_init")
-        self.receive_core_sources(port_name="f_init")
-        if self.first_run or self.instance.is_connected("equilibrium_f_init"):
+        self.receive_equilibrium(port_name="in_f")
+        self.receive_core_profiles(port_name="in_f")
+        self.receive_core_sources(port_name="in_f")
+        if self.first_run or self.instance.is_connected("equilibrium_in_f"):
             self.step_fn = make_step_fn(self.torax_config)
             self.sim_state, self.post_processed_outputs = (
                 get_initial_state_and_post_processed_outputs(
@@ -167,17 +167,17 @@ class ToraxMuscleRunner:
         self.t_next_inner = self.get_t_next()
         if self.t_cur >= self.last_communication + self.communication_interval:
             self.last_communication = self.t_cur
-            if self.instance.is_connected("equilibrium_o_i"):
-                self.send_ids(self.get_equilibrium_ids(), "equilibrium", "o_i")
-            if self.instance.is_connected("core_profiles_o_i"):
-                self.send_ids(self.get_core_profiles_ids(), "core_profiles", "o_i")
+            if self.instance.is_connected("equilibrium_out_i"):
+                self.send_ids(self.get_equilibrium_ids(), "equilibrium", "out_i")
+            if self.instance.is_connected("core_profiles_out_i"):
+                self.send_ids(self.get_core_profiles_ids(), "core_profiles", "out_i")
 
     def run_s(self) -> None:
         """Update time loop state using MUSCLE3 connections"""
         if self.t_cur >= self.last_communication + self.communication_interval:
-            self.receive_equilibrium(port_name="s")
-            self.receive_core_profiles(port_name="s")
-            self.receive_core_sources(port_name="s")
+            self.receive_equilibrium(port_name="in_s")
+            self.receive_core_profiles(port_name="in_s")
+            self.receive_core_sources(port_name="in_s")
 
     def run_timestep(self) -> None:
         """Evolve time loop state using the TORAX step function"""
@@ -211,8 +211,8 @@ class ToraxMuscleRunner:
         else:
             equilibrium_data = self.get_equilibrium_ids()
             core_profiles_data = self.get_core_profiles_ids()
-        self.send_ids(equilibrium_data, "equilibrium", "o_f")
-        self.send_ids(core_profiles_data, "core_profiles", "o_f")
+        self.send_ids(equilibrium_data, "equilibrium", "out_f")
+        self.send_ids(core_profiles_data, "core_profiles", "out_f")
 
     def get_instance(self) -> None:
         """Initialize MUSCLE3 instance and set up connection ports"""
@@ -220,11 +220,11 @@ class ToraxMuscleRunner:
         self.instance = Instance(
             {
                 Operator.F_INIT: [
-                    f"{ids_name}_f_init" for ids_name in coupled_ids_names
+                    f"{ids_name}_in_f" for ids_name in coupled_ids_names
                 ],
-                Operator.O_I: [f"{ids_name}_o_i" for ids_name in coupled_ids_names],
-                Operator.S: [f"{ids_name}_s" for ids_name in coupled_ids_names],
-                Operator.O_F: [f"{ids_name}_o_f" for ids_name in coupled_ids_names],
+                Operator.O_I: [f"{ids_name}_out_i" for ids_name in coupled_ids_names],
+                Operator.S: [f"{ids_name}_in_s" for ids_name in coupled_ids_names],
+                Operator.O_F: [f"{ids_name}_out_f" for ids_name in coupled_ids_names],
             }
         )
 
@@ -309,7 +309,7 @@ class ToraxMuscleRunner:
             return
         core_profiles_data, self.t_cur = ids_data
 
-        if port_name == "f_init" and self.use_IDS_plasma_composition == True:
+        if port_name == "in_f" and self.use_IDS_plasma_composition == True:
             # Update TORAX config with input plasma composition from received core_profiles IDS. 
             plasma_composition = plasma_composition_from_IMAS(core_profiles_data, main_ions_symbols=["H"])
             self.torax_config.update_fields({"plasma_composition": plasma_composition})
@@ -360,9 +360,9 @@ class ToraxMuscleRunner:
         """Send IDS message through MUSCLE3"""
         if not self.instance.is_connected(f"{ids_name}_{port_name}"):
             return
-        if port_name == "o_i":
+        if port_name == "out_i":
             t_next = self.t_next_inner
-        elif port_name == "o_f":
+        elif port_name == "out_f":
             t_next = self.t_next_outer
         msg = Message(self.t_cur, data=ids.serialize(), next_timestamp=t_next)
         self.instance.send(f"{ids_name}_{port_name}", msg)
@@ -386,9 +386,9 @@ class ToraxMuscleRunner:
 
     def update_t_next(self, t_next: Optional[float], port_name: str) -> None:
         """Update t_next to given value"""
-        if port_name == "f_init":
+        if port_name == "in_f":
             self.t_next_outer = t_next
-        elif port_name == "s":
+        elif port_name == "in_s":
             self.t_next_inner = t_next
 
     def fix_ymmsl_settings(self) -> None:
