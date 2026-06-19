@@ -4,11 +4,12 @@ Utility functions for muscle3 and torax.
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, TypeVar, cast, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, TypeVar, cast, TYPE_CHECKING, overload
 import torax
 
 import numpy as np
-from imas.ids_toplevel import IDSFactory, IDSToplevel
+from imas import IDSFactory
+from imas.ids_toplevel import IDSToplevel
 from libmuscle import Instance
 from torax._src.geometry.imas import IMASConfig
 
@@ -80,8 +81,27 @@ def get_geometry_config_dict(config: torax.ToraxConfig) -> dict:
     return config_dict
 
 
+@overload
 def get_setting_optional(
-    instance: Instance, setting_name: str, default: Optional[TSetting] = None
+    instance: Instance,
+    setting_name: str,
+    default: None = None,
+) -> TSetting | None: ...
+
+
+@overload
+def get_setting_optional(
+    instance: Instance,
+    setting_name: str,
+    default: TSetting,
+) -> TSetting: ...
+
+
+# it may be a nice proposal for the m3 api
+def get_setting_optional(
+    instance: Instance,
+    setting_name: str,
+    default: Optional[TSetting] = None,
 ) -> Optional[TSetting]:
     """Helper function to get optional settings from instance"""
     setting: Optional[TSetting]
@@ -105,10 +125,11 @@ def merge_extra_vars(
         )
     return equilibrium_data
 
-def create_light_equilibrium(equilibrium_data: IDSToplevel) -> IDSToplevel:
-    """Create a lighter equilibrium IDS  with only the fields needed for geometry. 
 
-    Useful to save memory since the full equilibrium can be large if it contains GGD and 2D Profiles. 
+def create_light_equilibrium(equilibrium_data: IDSToplevel) -> IDSToplevel:
+    """Create a lighter equilibrium IDS  with only the fields needed for geometry.
+
+    Useful to save memory since the full equilibrium can be large if it contains GGD and 2D Profiles.
     It can save a lot of time when processing multiple time slices.
     """
     light_equilibrium = IDSFactory().equilibrium()
@@ -118,7 +139,13 @@ def create_light_equilibrium(equilibrium_data: IDSToplevel) -> IDSToplevel:
     light_equilibrium.time_slice.resize(len(equilibrium_data.time_slice))
     for i in range(len(light_equilibrium.time_slice)):
         light_equilibrium.time_slice[i].time = equilibrium_data.time_slice[i].time
-        light_equilibrium.time_slice[i].profiles_1d = equilibrium_data.time_slice[i].profiles_1d
-        light_equilibrium.time_slice[i].boundary = equilibrium_data.time_slice[i].boundary
-        light_equilibrium.time_slice[i].global_quantities = equilibrium_data.time_slice[i].global_quantities
+        light_equilibrium.time_slice[i].profiles_1d = equilibrium_data.time_slice[
+            i
+        ].profiles_1d
+        light_equilibrium.time_slice[i].boundary = equilibrium_data.time_slice[
+            i
+        ].boundary
+        light_equilibrium.time_slice[i].global_quantities = equilibrium_data.time_slice[
+            i
+        ].global_quantities
     return light_equilibrium
