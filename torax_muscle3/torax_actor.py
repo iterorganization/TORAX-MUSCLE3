@@ -71,7 +71,7 @@ class ToraxMuscleRunner:
     """ToraxConfig object"""
     communication_interval: float
     """Interval for communication through MUSCLE3 ports"""
-    use_IDS_plasma_composition = None
+    use_IDS_plasma_composition: bool = False
     """Whether to use plasma composition from input core_profiles IDS on f_init or from TORAX config"""
     step_fn: SimulationStepFn
     """Torax step_function object"""
@@ -343,7 +343,7 @@ class ToraxMuscleRunner:
 
     def receive_ids_data(
         self, ids_name: str, port_name: str
-    ) -> Tuple[IDSToplevel, float, Optional[float]]:
+    ) -> Optional[Tuple[IDSToplevel, float]]:
         """Receive IDS message through MUSCLE3"""
         if not self.instance.is_connected(f"{ids_name}_{port_name}"):
             return None
