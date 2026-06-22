@@ -55,6 +55,22 @@ Core profiles
 - ids.time_slice[].profiles_1d.ion[].temperature
 - ids.time_slice[].profiles_1d.ion[].density
 
+Core sources
+^^^^^^^^^^^^^
+
+For each source in the core_sources IDS (core_sources.source[i]):
+    - source.profiles_1d[].time
+    - source.profiles_1d[].grid.rho_tor_norm
+Then depending on the source type, the following fields are required:
+- For **electron heating** sources:
+    - source.profiles_1d[].electrons.energy
+- For **ion heating** sources:
+    - source.profiles_1d[].total_ion_energy
+- For **particle** sources:
+    - source.profiles_1d[].electrons.particles
+- For **current drive** sources:
+    - source.profiles_1d[].j_parallel
+
 Outputs
 -------
 
