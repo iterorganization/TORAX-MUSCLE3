@@ -30,6 +30,7 @@ Available Settings
 * Optional
 
   - **output_all_timeslices**: (string) IMAS Data Dictionary version number to which data will be converted. Defaults to original dd_version of the data.
+  - **use_IDS_plasma_composition**: (bool) whether to use plasma composition from input core_profiles IDS on F_INIT or from TORAX config. Defaults to False (i.e. use TORAX config).
   - **t_initial**: (float) starting time of TORAX actor.
   - **t_final**: (float) ending time of TORAX actor.
   - **fixed_dt**: (float) timestep of TORAX actor.
@@ -39,14 +40,14 @@ Available Ports
 ---------------
 
 The Torax actor currently only has IDS coupling functionality for both input and output for the following IDSs:
-[equilibrium, core_profiles].
+[equilibrium, core_profiles], and for output only for [core_sources].
 
 * Optional
 
-  - **<ids_name>_f_init (F_INIT)**: given IDS as initial input.
-  - **<ids_name>_o_i (O_I)**: given IDS as inner loop output.
-  - **<ids_name>_s (S)**: given IDS as inner loop input.
-  - **<ids_name>_o_f (O_F)**: given IDS as final output.
+  - **<ids_name>_in_f (F_INIT)**: given IDS as initial input.
+  - **<ids_name>_out_i (O_I)**: given IDS as inner loop output.
+  - **<ids_name>_in_s (S)**: given IDS as inner loop input.
+  - **<ids_name>_out_f (O_F)**: given IDS as final output.
 
 General
 -------
