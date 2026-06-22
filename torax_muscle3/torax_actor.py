@@ -110,8 +110,11 @@ class ToraxMuscleRunner:
                 self.run_prep()
             self.run_f_init()
             while not self.step_fn.is_done(self.t_cur):
-                self.run_o_i()
-                self.run_s()
+                self.t_next_inner = self.get_t_next()
+                if self.t_cur >= self.last_communication + self.communication_interval:
+                    self.run_o_i()
+                    self.run_s()
+                    self.last_communication = self.t_cur
                 self.run_timestep()
                 if self.finished:
                     break
@@ -167,20 +170,14 @@ class ToraxMuscleRunner:
 
     def run_o_i(self) -> None:
         """Send out time loop state using MUSCLE3 connections"""
-        self.t_next_inner = self.get_t_next()
-        if self.t_cur >= self.last_communication + self.communication_interval:
-            self.last_communication = self.t_cur
-            if self.instance.is_connected("equilibrium_out_i"):
-                self.send_ids(self.get_equilibrium_ids(), "equilibrium", "out_i")
-            if self.instance.is_connected("core_profiles_out_i"):
-                self.send_ids(self.get_core_profiles_ids(), "core_profiles", "out_i")
+        self.send_ids(self.get_equilibrium_ids(), "equilibrium", "out_i")
+        self.send_ids(self.get_core_profiles_ids(), "core_profiles", "out_i")
 
     def run_s(self) -> None:
         """Update time loop state using MUSCLE3 connections"""
-        if self.t_cur >= self.last_communication + self.communication_interval:
-            self.receive_equilibrium(port_name="in_s")
-            self.receive_core_profiles(port_name="in_s")
-            self.receive_core_sources(port_name="in_s")
+        self.receive_equilibrium(port_name="in_s")
+        self.receive_core_profiles(port_name="in_s")
+        self.receive_core_sources(port_name="in_s")
 
     def run_timestep(self) -> None:
         """Evolve time loop state using the TORAX step function"""
