@@ -186,11 +186,11 @@ model:
     torax:
       implementation: torax
       ports:
-        f_init: [IDS_NAME_f_init]
-        o_f: [IDS_NAME_o_f]
+        f_init: [IDS_NAME_in_f]
+        o_f: [IDS_NAME_out_f]
   conduits:
-    source.IDS_NAME_out: torax.IDS_NAME_f_init
-    torax.IDS_NAME_o_f: sink.IDS_NAME_in
+    source.IDS_NAME_out: torax.IDS_NAME_in_f
+    torax.IDS_NAME_out_f: sink.IDS_NAME_in
 settings:
   source.imas_source: {data_source_path}
   sink.imas_sink: {data_sink_path}
