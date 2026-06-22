@@ -83,9 +83,9 @@ model:
     torax:
       implementation: torax
       ports:
-        o_f: [IDS_NAME_o_f]
+        o_f: [IDS_NAME_out_f]
   conduits:
-    torax.IDS_NAME_o_f: sink.IDS_NAME_in
+    torax.IDS_NAME_out_f: sink.IDS_NAME_in
 settings:
   sink.imas_sink: {data_sink_path}
   torax.python_config_module: {config_path}
@@ -103,9 +103,9 @@ model:
     torax:
       implementation: torax
       ports:
-        f_init: [IDS_NAME_f_init]
+        f_init: [IDS_NAME_in_f]
   conduits:
-    source.IDS_NAME_out: torax.IDS_NAME_f_init
+    source.IDS_NAME_out: torax.IDS_NAME_in_f
 settings:
   source.imas_source: {data_source_path}
   torax.python_config_module: {config_path}
@@ -124,11 +124,11 @@ model:
     torax:
       implementation: torax
       ports:
-        s: [IDS_NAME_s]
-        o_i: [IDS_NAME_o_i]
+        s: [IDS_NAME_in_s]
+        o_i: [IDS_NAME_out_i]
   conduits:
-    torax.IDS_NAME_o_i: reply.IDS_NAME_in
-    reply.IDS_NAME_out: torax.IDS_NAME_s
+    torax.IDS_NAME_out_i: reply.IDS_NAME_in
+    reply.IDS_NAME_out: torax.IDS_NAME_in_s
 settings:
   reply.imas_source: {data_source_path}
   torax.python_config_module: {config_path}
@@ -147,11 +147,11 @@ model:
     torax:
       implementation: torax
       ports:
-        s: [IDS_NAME_s]
-        o_i: [IDS_NAME_o_i]
+        s: [IDS_NAME_in_s]
+        o_i: [IDS_NAME_out_i]
   conduits:
-    torax.IDS_NAME_o_i: mirror.IDS_NAME_in
-    mirror.IDS_NAME_out: torax.IDS_NAME_s
+    torax.IDS_NAME_out_i: mirror.IDS_NAME_in
+    mirror.IDS_NAME_out: torax.IDS_NAME_in_s
 settings:
   torax.python_config_module: {config_path}
 """
