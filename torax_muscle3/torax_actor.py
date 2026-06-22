@@ -133,6 +133,9 @@ class ToraxMuscleRunner:
         self.use_IDS_plasma_composition = get_setting_optional(
             self.instance, "use_IDS_plasma_composition", False
         )
+        # time window is taken from the received equilibrium sequence (set in
+        # receive_equilibrium), unless overridden by explicit numerics settings
+        self.equilibrium_t_range = None
         # load config file from path
         config_module_str = self.instance.get_setting("python_config_module")
         self.torax_config = build_torax_config_from_file(
@@ -150,6 +153,18 @@ class ToraxMuscleRunner:
         self.receive_core_profiles(port_name="in_f")
         self.receive_core_sources(port_name="in_f")
         if self.first_run or self.instance.is_connected("equilibrium_in_f"):
+            # Take the simulated time window from the received equilibrium sequence
+            # (t_initial/t_final = first/last /time); explicit ymmsl numerics settings,
+            # if any, still override it afterwards.
+            if self.equilibrium_t_range is not None:
+                t_initial, t_final = self.equilibrium_t_range
+                self.torax_config.update_fields(
+                    {"numerics.t_initial": t_initial, "numerics.t_final": t_final}
+                )
+                self.fix_ymmsl_settings()
+                self.runtime_params_provider = RuntimeParamsProvider.from_config(
+                    self.torax_config
+                )
             self.step_fn = make_step_fn(self.torax_config)
             self.sim_state, self.post_processed_outputs = (
                 get_initial_state_and_post_processed_outputs(
@@ -259,6 +274,11 @@ class ToraxMuscleRunner:
         torax_config_dict = get_geometry_config_dict(self.torax_config)
         torax_config_dict["geometry_type"] = "imas"
         light_equilibrium = create_light_equilibrium(equilibrium_data)
+        if port_name == "in_f" and len(light_equilibrium.time):
+            self.equilibrium_t_range = (
+                float(light_equilibrium.time[0]),
+                float(light_equilibrium.time[-1]),
+            )
         with DBEntry("imas:memory?path=/", "w") as db:
             db.put(light_equilibrium)
             for t in light_equilibrium.time:
