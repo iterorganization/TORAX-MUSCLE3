@@ -118,6 +118,17 @@ class ToraxMuscleRunner:
                 self.run_timestep()
                 if self.finished:
                     break
+            else:
+                # Inner loop finished normally (is_done): emit one final O_I
+                # carrying the last state with next_timestamp=None, so the
+                # out_i stream terminates cleanly. Without it the last O_I sent
+                # in-loop has a non-None next_timestamp (the loop exits before
+                # run_o_i at t_final), leaving an out_i consumer -- e.g. a
+                # distill recorder tapping out_i -- waiting for a message that
+                # never comes until the port closes. No matching run_s: the
+                # micro-loop is over.
+                self.t_next_inner = None
+                self.run_o_i()
             self.run_o_f()
 
         self.finished = True
