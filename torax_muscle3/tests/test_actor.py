@@ -6,6 +6,7 @@ from imas.ids_defs import CLOSEST_INTERP
 
 import torax_muscle3
 from torax_muscle3.torax_actor import main as torax_actor
+from torax_muscle3.torax_actor import numerics_overrides
 
 
 def source_for_tests():
@@ -211,3 +212,32 @@ def test_actor(tmp_path, monkeypatch, ymmsl_text):
         "torax": torax_actor,
     }
     libmuscle.runner.run_simulation(configuration, implementations)
+
+
+NO_YMMSL_NUMERICS = {"t_initial": None, "t_final": None, "fixed_dt": None}
+
+
+def test_time_window_from_equilibrium():
+    """t_range from the received equilibrium sequence sets the window."""
+    assert numerics_overrides((1.5, 3.25), NO_YMMSL_NUMERICS) == {
+        "numerics.t_initial": 1.5,
+        "numerics.t_final": 3.25,
+    }
+
+
+def test_ymmsl_numerics_override_equilibrium_window():
+    """Explicit ymmsl t_initial/t_final win over the equilibrium-derived range."""
+    assert numerics_overrides(
+        (1.5, 3.25), {"t_initial": 2.0, "t_final": 4.0, "fixed_dt": None}
+    ) == {"numerics.t_initial": 2.0, "numerics.t_final": 4.0}
+
+
+def test_partial_ymmsl_keeps_equilibrium_window():
+    """A ymmsl override of only fixed_dt leaves the equilibrium window intact."""
+    assert numerics_overrides(
+        (1.5, 3.25), {"t_initial": None, "t_final": None, "fixed_dt": 0.05}
+    ) == {
+        "numerics.t_initial": 1.5,
+        "numerics.t_final": 3.25,
+        "numerics.fixed_dt": 0.05,
+    }

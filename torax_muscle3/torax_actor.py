@@ -57,6 +57,27 @@ from torax_muscle3.utils import (
 
 logger = logging.getLogger()
 
+#: numerics settings that may be set explicitly through ymmsl settings
+NUMERICS_SETTINGS = ("t_initial", "t_final", "fixed_dt")
+
+
+def numerics_overrides(
+    equilibrium_t_range: Optional[Tuple[float, float]],
+    explicit_numerics: dict,
+) -> dict:
+    """numerics.* overrides for update_fields, lowest precedence first.
+
+    The equilibrium window is applied first and explicit ymmsl numerics last, so
+    a ymmsl setting wins key-by-key over the equilibrium-derived t_initial/t_final.
+    """
+    fields: dict = {}
+    if equilibrium_t_range is not None:
+        fields["numerics.t_initial"], fields["numerics.t_final"] = equilibrium_t_range
+    fields.update(
+        {f"numerics.{k}": v for k, v in explicit_numerics.items() if v is not None}
+    )
+    return fields
+
 
 class ToraxMuscleRunner:
     """Object for running torax simulation"""
@@ -95,6 +116,9 @@ class ToraxMuscleRunner:
     """Whether the run_sim function has been run fully"""
     last_communication: float = -np.inf
     """Last timestamp for which the MUSCLE3 communication was done"""
+    equilibrium_t_range: Optional[Tuple[float, float]] = None
+    """(t_initial, t_final) taken from the equilibrium sequence received on in_f,
+    or None when no equilibrium is connected. Set in receive_equilibrium."""
 
     def __init__(self) -> None:
         self.get_instance()
@@ -144,9 +168,6 @@ class ToraxMuscleRunner:
         self.use_IDS_plasma_composition = get_setting_optional(
             self.instance, "use_IDS_plasma_composition", False
         )
-        # time window is taken from the received equilibrium sequence (set in
-        # receive_equilibrium), unless overridden by explicit numerics settings
-        self.equilibrium_t_range = None
         # load config file from path
         config_module_str = self.instance.get_setting("python_config_module")
         self.torax_config = build_torax_config_from_file(
@@ -164,15 +185,23 @@ class ToraxMuscleRunner:
         self.receive_core_profiles(port_name="in_f")
         self.receive_core_sources(port_name="in_f")
         if self.first_run or self.instance.is_connected("equilibrium_in_f"):
-            # Take the simulated time window from the received equilibrium sequence
-            # (t_initial/t_final = first/last /time); explicit ymmsl numerics settings,
-            # if any, still override it afterwards.
+            # We size the simulated time window from the equilibrium sequence the
+            # driver sends on in_f (its first/last /time). This assumes an
+            # equilibrium-centric coupling; workflows driven by another IDS would
+            # need a different source (e.g. the shortest window common to all
+            # received IDSs). Explicit ymmsl numerics settings always win -- see
+            # apply_numerics_overrides for the full precedence order.
             if self.equilibrium_t_range is not None:
-                t_initial, t_final = self.equilibrium_t_range
                 self.torax_config.update_fields(
-                    {"numerics.t_initial": t_initial, "numerics.t_final": t_final}
+                    numerics_overrides(
+                        self.equilibrium_t_range, self._explicit_ymmsl_numerics()
+                    )
                 )
-                self.fix_ymmsl_settings()
+                logger.info(
+                    "TORAX time window: [%g, %g] s",
+                    self.torax_config.numerics.t_initial,
+                    self.torax_config.numerics.t_final,
+                )
                 self.runtime_params_provider = RuntimeParamsProvider.from_config(
                     self.torax_config
                 )
@@ -422,15 +451,18 @@ class ToraxMuscleRunner:
         elif port_name == "in_s":
             self.t_next_inner = t_next
 
+    def _explicit_ymmsl_numerics(self) -> dict:
+        """Numerics explicitly set in the ymmsl settings (None when unset)."""
+        return {
+            name: get_setting_optional(self.instance, name, None)
+            for name in NUMERICS_SETTINGS
+        }
+
     def fix_ymmsl_settings(self) -> None:
-        for numerics_setting in [
-            "t_initial",
-            "t_final",
-            "fixed_dt",
-        ]:
-            var = get_setting_optional(self.instance, numerics_setting, None)
-            if var is not None:
-                self.torax_config.update_fields({f"numerics.{numerics_setting}": var})
+        # ymmsl numerics overrides only; sets the base config before any equilibrium
+        self.torax_config.update_fields(
+            numerics_overrides(None, self._explicit_ymmsl_numerics())
+        )
 
 
 def main() -> None:
