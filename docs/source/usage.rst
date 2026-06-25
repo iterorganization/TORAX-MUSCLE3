@@ -36,6 +36,31 @@ Available Settings
   - **fixed_dt**: (float) timestep of TORAX actor.
   - **communication_interval**: (float) time interval at which to send/receive data through MUSCLE3 connections. Common to all connected ports. Defaults to 1e-6 seconds.
 
+Simulated time window
+---------------------
+
+The simulated time window (``numerics.t_initial`` / ``numerics.t_final``) is
+resolved from up to three sources, listed from lowest to highest precedence — a
+later source overrides an earlier one key-by-key:
+
+1. the ``numerics`` block in the TORAX config file (``python_config_module``);
+2. the **first and last** ``time`` of the equilibrium sequence received on
+   ``equilibrium_in_f`` on F_INIT, if that port is connected. This lets a coupled
+   driver size the run from the data it sends, so the config file needs no
+   scenario-specific time range;
+3. the explicit ``t_initial`` / ``t_final`` ymmsl settings above, if set.
+
+So an equilibrium-driven workflow can leave ``t_initial`` / ``t_final`` unset and
+let the input data drive the window, while an operator can always pin the window
+by setting them explicitly in the ymmsl. ``fixed_dt`` is never derived from the
+equilibrium; it only comes from the config file or an explicit ymmsl setting. The
+window source is reported in the actor log on F_INIT.
+
+.. note::
+   The window is taken from the equilibrium only. Workflows centered on a
+   different IDS would need another source (e.g. the shortest window common to
+   all received IDSs); this is not yet implemented.
+
 Available Ports
 ---------------
 
