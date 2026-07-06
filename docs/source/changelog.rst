@@ -3,6 +3,13 @@
 Changelog
 =========
 
+Unreleased
+----------
+
+- Take the simulated time window (``t_initial``/``t_final``) from the first/last
+  ``time`` of the equilibrium received on ``equilibrium_in_f``, unless overridden
+  by explicit ymmsl numerics settings. See :ref:`usage` for the precedence order.
+
 TORAX-MUSCLE3 0.1.2
 ------------------
 
