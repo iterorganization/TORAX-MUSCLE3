@@ -317,6 +317,7 @@ def test_checkpoint(tmp_path, monkeypatch, ymmsl_text, ymmsl_resume):
     )
     libmuscle.runner.run_simulation(configuration, implementations)
 
+
 NO_YMMSL_NUMERICS = {"t_initial": None, "t_final": None, "fixed_dt": None}
 
 
