@@ -208,6 +208,7 @@ class ToraxMuscleRunner:
         self.first_run = msg.data[0]["first_run"]
         self.t_cur = msg.data[0]["t_cur"]
         self.t_final = msg.data[0]["t_final"]
+        self.equilibrium_t_range = msg.data[0]["equilibrium_t_range"]
         self.t_next_inner = msg.data[0]["t_next_inner"]
         self.t_next_outer = msg.data[0]["t_next_outer"]
         self.finished = msg.data[0]["finished"]
@@ -299,6 +300,7 @@ class ToraxMuscleRunner:
                     }
                     if self.output_all_timeslices
                     else None,
+                    "equilibrium_t_range": self.equilibrium_t_range,
                 }
             ]
             msg = Message(float(self.t_cur), data=data)

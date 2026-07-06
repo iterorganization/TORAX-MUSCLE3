@@ -208,6 +208,7 @@ YMMSL_RESUME_TEMPLATE = (
 \n
 resume:
   source: {workdir}/source_1.pack
+  sink: {workdir}/sink_1.pack
   torax: {workdir}/torax_1.pack
 """
 )
