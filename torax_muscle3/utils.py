@@ -143,6 +143,7 @@ def create_light_equilibrium(equilibrium_data: IDSToplevel) -> IDSToplevel:
     light_equilibrium.ids_properties.homogeneous_time = 1
     light_equilibrium.time = equilibrium_data.time
     light_equilibrium.vacuum_toroidal_field = equilibrium_data.vacuum_toroidal_field
+    light_equilibrium.code = equilibrium_data.code
     light_equilibrium.time_slice.resize(len(equilibrium_data.time_slice))
     for i in range(len(light_equilibrium.time_slice)):
         light_equilibrium.time_slice[i].time = equilibrium_data.time_slice[i].time
