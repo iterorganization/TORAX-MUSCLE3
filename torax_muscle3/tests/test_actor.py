@@ -11,11 +11,15 @@ from torax_muscle3.torax_actor import numerics_overrides
 
 def source_for_tests():
     """MUSCLE3 actor sending out imas data to test torax-muscle3 actor"""
-    instance = libmuscle.Instance()
+    instance = libmuscle.Instance(flags=libmuscle.InstanceFlags.USES_CHECKPOINT_API)
     ports = instance.list_ports()[ymmsl.Operator.O_F]
     imas_filepath = instance.get_setting("imas_source")
     with imas.DBEntry(uri=imas_filepath, mode="r") as db:
         while instance.reuse_instance():
+            if instance.resuming():
+                pass
+            if instance.should_init():
+                pass
             for port in ports:
                 ids_name = port.replace("_out", "")
                 ids_data = db.get(ids_name=ids_name)
@@ -23,21 +27,31 @@ def source_for_tests():
                     0, data=ids_data.serialize(), next_timestamp=None
                 )
                 instance.send(port, msg_out)
+            if instance.should_save_final_snapshot():
+                msg = libmuscle.Message(0)
+                instance.save_final_snapshot(msg)
 
 
 def sink_for_tests():
     """MUSCLE3 actor receiving imas data to test torax-muscle3 actor"""
-    instance = libmuscle.Instance()
+    instance = libmuscle.Instance(flags=libmuscle.InstanceFlags.USES_CHECKPOINT_API)
     ports = instance.list_ports()[ymmsl.Operator.F_INIT]
     data_sink_path = instance.get_setting("imas_sink")
     with imas.DBEntry(uri=data_sink_path, mode="w") as db:
         while instance.reuse_instance():
+            if instance.resuming():
+                pass
+            if instance.should_init():
+                pass
             for port in ports:
                 ids_name = port.replace("_in", "")
                 msg_in = instance.receive(port)
                 ids_data = getattr(imas.IDSFactory(), ids_name)()
                 ids_data.deserialize(msg_in.data)
                 db.put(ids_data)
+            if instance.should_save_final_snapshot():
+                msg = libmuscle.Message(0)
+                instance.save_final_snapshot(msg)
 
 
 def reply_for_tests():
@@ -157,6 +171,48 @@ settings:
   torax.python_config_module: {config_path}
 """
 
+YMMSL_CHECKPOINT_TEMPLATE = """
+ymmsl_version: v0.1
+model:
+  name: test_model
+  components:
+    source:
+      implementation: source
+      ports:
+        o_f: [IDS_NAME_out]
+    sink:
+      implementation: sink
+      ports:
+        f_init: [IDS_NAME_in]
+    torax:
+      implementation: torax
+      ports:
+        f_init: [IDS_NAME_in_f]
+        o_f: [IDS_NAME_out_f]
+  conduits:
+    source.IDS_NAME_out: torax.IDS_NAME_in_f
+    torax.IDS_NAME_out_f: sink.IDS_NAME_in
+settings:
+  source.imas_source: {data_source_path}
+  sink.imas_sink: {data_sink_path}
+  torax.python_config_module: {config_path}
+checkpoints:
+  at_end: true
+  simulation_time: 
+  - every: 100
+"""
+
+YMMSL_RESUME_TEMPLATE = (
+    YMMSL_CHECKPOINT_TEMPLATE
+    + """
+\n
+resume:
+  source: {workdir}/source_1.pack
+  sink: {workdir}/sink_1.pack
+  torax: {workdir}/torax_1.pack
+"""
+)
+
 YMMSL_INPUT_EQUILIBRIUM = YMMSL_INPUT_TEMPLATE.replace("IDS_NAME", "equilibrium")
 YMMSL_INPUT_CORE_PROFILES = YMMSL_INPUT_TEMPLATE.replace("IDS_NAME", "core_profiles")
 YMMSL_INPUT_CORE_SOURCES = YMMSL_INPUT_TEMPLATE.replace("IDS_NAME", "core_sources")
@@ -169,6 +225,10 @@ YMMSL_REPLY_CORE_SOURCES = YMMSL_REPLY_TEMPLATE.replace("IDS_NAME", "core_source
 YMMSL_INNER_EQUILIBRIUM = YMMSL_INNER_TEMPLATE.replace("IDS_NAME", "equilibrium")
 YMMSL_INNER_CORE_PROFILES = YMMSL_INNER_TEMPLATE.replace("IDS_NAME", "core_profiles")
 YMMSL_INNER_CORE_SOURCES = YMMSL_INNER_TEMPLATE.replace("IDS_NAME", "core_sources")
+YMMSL_CHECKPOINT_EQUILIBRIUM = YMMSL_CHECKPOINT_TEMPLATE.replace(
+    "IDS_NAME", "equilibrium"
+)
+YMMSL_RESUME_EQUILIBRIUM = YMMSL_RESUME_TEMPLATE.replace("IDS_NAME", "equilibrium")
 
 
 @pytest.mark.parametrize(
@@ -211,6 +271,51 @@ def test_actor(tmp_path, monkeypatch, ymmsl_text):
         "source": source_for_tests,
         "torax": torax_actor,
     }
+    libmuscle.runner.run_simulation(configuration, implementations)
+
+
+@pytest.mark.parametrize(
+    "ymmsl_text, ymmsl_resume",
+    [
+        pytest.param(
+            YMMSL_CHECKPOINT_EQUILIBRIUM,
+            YMMSL_RESUME_EQUILIBRIUM,
+            id="checkpoint equilibrium",
+        ),
+    ],
+)
+@pytest.mark.filterwarnings("ignore:.*use of fork():DeprecationWarning")
+def test_checkpoint(tmp_path, monkeypatch, ymmsl_text, ymmsl_resume):
+    monkeypatch.chdir(tmp_path)
+
+    filename = "ITERhybrid_COCOS17_IDS_ddv4.nc"
+    data_source_path = f"{torax_muscle3.__path__[0]}/tests/data/{filename}"
+    data_sink_path = f"imas:hdf5?path={(tmp_path / 'sink_dir').absolute()}"
+    config_path = f"{torax_muscle3.__path__[0]}/tests/basic_config.py"
+    configuration = ymmsl.load(
+        ymmsl_text.format(
+            data_source_path=data_source_path,
+            data_sink_path=data_sink_path,
+            config_path=config_path,
+        )
+    )
+    implementations = {
+        "reply": reply_for_tests,
+        "mirror": mirror_for_tests,
+        "sink": sink_for_tests,
+        "source": source_for_tests,
+        "torax": torax_actor,
+    }
+    libmuscle.runner.run_simulation(configuration, implementations)
+    # breakpoint()
+    configuration = ymmsl.load(
+        ymmsl_resume.format(
+            data_source_path=data_source_path,
+            data_sink_path=data_sink_path,
+            config_path=config_path,
+            workdir=tmp_path,
+        )
+    )
     libmuscle.runner.run_simulation(configuration, implementations)
 
 
