@@ -1,204 +1,170 @@
+import sys
+from pathlib import Path
+from typing import Any, Dict
+
 import imas
-import libmuscle
 import pytest
-import ymmsl
+import yaml
 from imas.ids_defs import CLOSEST_INTERP
+from imas.ids_toplevel import IDSToplevel
+from libmuscle import Message
+from libmuscle.pytest import MuscleTester
 
 import torax_muscle3
-from torax_muscle3.torax_actor import main as torax_actor
+
+TESTS_DIR = Path(torax_muscle3.__path__[0]) / "tests"
+DATA_PATH = TESTS_DIR / "data" / "ITERhybrid_COCOS17_IDS_ddv4.nc"
+CONFIG_PATH = TESTS_DIR / "basic_config.py"
+
+# torax free-runs from its own config with no external state, so there is no
+# f_init/inner-loop combination to exercise here. Two known-unsupported
+# combinations are intentionally not covered by a test:
+# - core_profiles as f_init input: the test data file has no core_profiles IDS.
+# - equilibrium as inner-loop reply source fed back into f_init: a single
+#   equilibrium_output slice is not sufficient to reconstruct an equilibrium
+#   f_init input.
 
 
-def source_for_tests():
-    """MUSCLE3 actor sending out imas data to test torax-m3 actor"""
-    instance = libmuscle.Instance()
-    ports = instance.list_ports()[ymmsl.Operator.O_F]
-    imas_filepath = instance.get_setting("imas_source")
-    with imas.DBEntry(uri=imas_filepath, mode="r") as db:
-        while instance.reuse_instance():
-            for port in ports:
-                ids_name = port.replace("_out", "")
-                ids_data = db.get(ids_name=ids_name)
-                msg_out = libmuscle.Message(
-                    0, data=ids_data.serialize(), next_timestamp=None
-                )
-                instance.send(port, msg_out)
+def build_config(ports: Dict[str, Any]) -> str:
+    """Build a v0.2 yMMSL config for the torax program with only the given ports declared.
 
-
-def sink_for_tests():
-    """MUSCLE3 actor receiving imas data to test torax-m3 actor"""
-    instance = libmuscle.Instance()
-    ports = instance.list_ports()[ymmsl.Operator.F_INIT]
-    data_sink_path = instance.get_setting("imas_sink")
-    with imas.DBEntry(uri=data_sink_path, mode="w") as db:
-        while instance.reuse_instance():
-            for port in ports:
-                ids_name = port.replace("_in", "")
-                msg_in = instance.receive(port)
-                ids_data = getattr(imas.IDSFactory(), ids_name)()
-                ids_data.deserialize(msg_in.data)
-                db.put(ids_data)
-
-
-def reply_for_tests():
-    instance = libmuscle.Instance()
-    imas_filepath = instance.get_setting("imas_source")
-    with imas.DBEntry(uri=imas_filepath, mode="r") as db:
-        equilibrium_data = db.get(ids_name="equilibrium")
-        with imas.DBEntry("imas:memory?path=/", "w") as db2:
-            db2.put(equilibrium_data)
-            while instance.reuse_instance():
-                msg_in = instance.receive("equilibrium_in")
-                equilibrium_data = db2.get_slice(
-                    ids_name="equilibrium",
-                    time_requested=msg_in.timestamp,
-                    interpolation_method=CLOSEST_INTERP,
-                )
-                msg_equilibrium_out = libmuscle.Message(
-                    msg_in.timestamp,
-                    data=equilibrium_data.serialize(),
-                    next_timestamp=msg_in.next_timestamp,
-                )
-                instance.send("equilibrium_out", msg_equilibrium_out)
-
-
-def mirror_for_tests():
-    """MUSCLE3 actor receiving imas data to test torax-m3 actor"""
-    instance = libmuscle.Instance()
-    ports = instance.list_ports()[ymmsl.Operator.F_INIT]
-    while instance.reuse_instance():
-        for port in ports:
-            msg_in = instance.receive(port)
-            instance.send(port.replace("_in", "_out"), msg_in)
-
-
-YMMSL_OUTPUT_TEMPLATE = """
-ymmsl_version: v0.1
-model:
-  name: test_model
-  components:
-    sink:
-      implementation: sink
-      ports:
-        f_init: [IDS_NAME_in]
-    torax:
-      implementation: torax
-      ports:
-        o_f: [IDS_NAME_o_f]
-  conduits:
-    torax.IDS_NAME_o_f: sink.IDS_NAME_in
-settings:
-  sink.imas_sink: {data_sink_path}
-  torax.python_config_module: {config_path}
-"""
-
-YMMSL_INPUT_TEMPLATE = """
-ymmsl_version: v0.1
-model:
-  name: test_model
-  components:
-    source:
-      implementation: source
-      ports:
-        o_f: [IDS_NAME_out]
-    torax:
-      implementation: torax
-      ports:
-        f_init: [IDS_NAME_f_init]
-  conduits:
-    source.IDS_NAME_out: torax.IDS_NAME_f_init
-settings:
-  source.imas_source: {data_source_path}
-  torax.python_config_module: {config_path}
-"""
-
-YMMSL_REPLY_TEMPLATE = """
-ymmsl_version: v0.1
-model:
-  name: test_model
-  components:
-    reply:
-      implementation: reply
-      ports:
-        f_init: [IDS_NAME_in]
-        o_f: [IDS_NAME_out]
-    torax:
-      implementation: torax
-      ports:
-        s: [IDS_NAME_s]
-        o_i: [IDS_NAME_o_i]
-  conduits:
-    torax.IDS_NAME_o_i: reply.IDS_NAME_in
-    reply.IDS_NAME_out: torax.IDS_NAME_s
-settings:
-  reply.imas_source: {data_source_path}
-  torax.python_config_module: {config_path}
-"""
-
-YMMSL_INNER_TEMPLATE = """
-ymmsl_version: v0.1
-model:
-  name: test_model
-  components:
-    mirror:
-      implementation: mirror
-      ports:
-        f_init: [IDS_NAME_in]
-        o_f: [IDS_NAME_out]
-    torax:
-      implementation: torax
-      ports:
-        s: [IDS_NAME_s]
-        o_i: [IDS_NAME_o_i]
-  conduits:
-    torax.IDS_NAME_o_i: mirror.IDS_NAME_in
-    mirror.IDS_NAME_out: torax.IDS_NAME_s
-settings:
-  torax.python_config_module: {config_path}
-"""
-
-YMMSL_INPUT_EQUILIBRIUM = YMMSL_INPUT_TEMPLATE.replace("IDS_NAME", "equilibrium")
-YMMSL_INPUT_CORE_PROFILES = YMMSL_INPUT_TEMPLATE.replace("IDS_NAME", "core_profiles")
-YMMSL_OUTPUT_EQUILIBRIUM = YMMSL_OUTPUT_TEMPLATE.replace("IDS_NAME", "equilibrium")
-YMMSL_OUTPUT_CORE_PROFILES = YMMSL_OUTPUT_TEMPLATE.replace("IDS_NAME", "core_profiles")
-YMMSL_REPLY_EQUILIBRIUM = YMMSL_REPLY_TEMPLATE.replace("IDS_NAME", "equilibrium")
-YMMSL_REPLY_CORE_PROFILES = YMMSL_REPLY_TEMPLATE.replace("IDS_NAME", "core_profiles")
-YMMSL_INNER_EQUILIBRIUM = YMMSL_INNER_TEMPLATE.replace("IDS_NAME", "equilibrium")
-YMMSL_INNER_CORE_PROFILES = YMMSL_INNER_TEMPLATE.replace("IDS_NAME", "core_profiles")
-
-
-@pytest.mark.parametrize(
-    "ymmsl_text",
-    [
-        pytest.param(YMMSL_INPUT_EQUILIBRIUM, id="input equilibrium"),
-        pytest.param(YMMSL_OUTPUT_EQUILIBRIUM, id="output equilibrium"),
-        pytest.param(YMMSL_OUTPUT_CORE_PROFILES, id="output core_profiles"),
-        pytest.param(YMMSL_REPLY_EQUILIBRIUM, id="reply equilibrium"),
-        pytest.param(YMMSL_INNER_CORE_PROFILES, id="inner core_profiles"),
-        # # no core_profiles in input_data
-        # pytest.param(YMMSL_INPUT_CORE_PROFILES, id='input core_profiles'),
-        # # equilibrium_output not sufficient for equilibrium input
-        # pytest.param(YMMSL_INNER_EQUILIBRIUM, id='inner equilibrium'),
-    ],
-)
-@pytest.mark.filterwarnings("ignore:.*use of fork():DeprecationWarning")
-def test_actor(tmp_path, monkeypatch, ymmsl_text):
-    monkeypatch.chdir(tmp_path)
-    filename = "ITERhybrid_COCOS17_IDS_ddv4.nc"
-    data_source_path = f"{torax_muscle3.__path__[0]}/tests/data/{filename}"
-    data_sink_path = f"imas:hdf5?path={(tmp_path / 'sink_dir').absolute()}"
-    config_path = f"{torax_muscle3.__path__[0]}/tests/basic_config.py"
-    configuration = ymmsl.load(
-        ymmsl_text.format(
-            data_source_path=data_source_path,
-            data_sink_path=data_sink_path,
-            config_path=config_path,
-        )
+    Restricting the declared ports controls exactly which ports
+    ``MuscleTester`` wires up to the tester component, since torax's actual
+    ``Instance`` always declares all 8 ports regardless of what is connected.
+    """
+    return yaml.safe_dump(
+        {
+            "ymmsl_version": "v0.2",
+            "programs": {
+                "torax": {
+                    "ports": ports,
+                    "executable": sys.executable,
+                    "args": ["-m", "torax_muscle3.torax_actor"],
+                }
+            },
+            "settings": {"torax.python_config_module": str(CONFIG_PATH)},
+        }
     )
-    implementations = {
-        "reply": reply_for_tests,
-        "mirror": mirror_for_tests,
-        "sink": sink_for_tests,
-        "source": source_for_tests,
-        "torax": torax_actor,
-    }
-    libmuscle.runner.run_simulation(configuration, implementations)
+
+
+def load_ids(ids_name: str) -> IDSToplevel:
+    """Load an IDS from the shared test data file."""
+    with imas.DBEntry(uri=str(DATA_PATH), mode="r") as db:
+        return db.get(ids_name=ids_name)
+
+
+def deserialize(ids_name: str, data: bytes) -> IDSToplevel:
+    """Deserialize a MUSCLE3 message payload into an IDS."""
+    ids = getattr(imas.IDSFactory(), ids_name)()
+    ids.deserialize(data)
+    return ids
+
+
+@pytest.mark.filterwarnings("ignore:.*use of fork():DeprecationWarning")
+def test_torax_runs_from_initial_equilibrium(muscle3_tester: MuscleTester) -> None:
+    """torax builds its initial state from an externally supplied equilibrium and
+    free-runs to completion without further MUSCLE3 exchanges."""
+    config = build_config(
+        {"f_init": ["equilibrium_f_init"], "o_f": ["equilibrium_o_f", "core_profiles_o_f"]}
+    )
+    tester = muscle3_tester.start_implementation(config, "torax", default_timeout=120)
+
+    equilibrium_ids = load_ids("equilibrium")
+    tester.send("equilibrium_f_init", Message(0.0, data=equilibrium_ids.serialize()))
+
+    final_equilibrium = deserialize("equilibrium", tester.receive("equilibrium_o_f").data)
+    final_core_profiles = deserialize("core_profiles", tester.receive("core_profiles_o_f").data)
+    assert len(final_equilibrium.time) > 0
+    assert len(final_core_profiles.time) > 0
+
+
+@pytest.mark.filterwarnings("ignore:.*use of fork():DeprecationWarning")
+def test_torax_output_equilibrium(muscle3_tester: MuscleTester) -> None:
+    """torax runs entirely from its own config (no external f_init input) and
+    must still emit a valid equilibrium IDS on o_f."""
+    config = build_config({"o_f": ["equilibrium_o_f"]})
+    tester = muscle3_tester.start_implementation(config, "torax", default_timeout=120)
+
+    final_equilibrium = deserialize("equilibrium", tester.receive("equilibrium_o_f").data)
+    assert len(final_equilibrium.time) > 0
+
+
+@pytest.mark.filterwarnings("ignore:.*use of fork():DeprecationWarning")
+def test_torax_output_core_profiles(muscle3_tester: MuscleTester) -> None:
+    """torax runs entirely from its own config (no external f_init input) and
+    must still emit a valid core_profiles IDS on o_f."""
+    config = build_config({"o_f": ["core_profiles_o_f"]})
+    tester = muscle3_tester.start_implementation(config, "torax", default_timeout=120)
+
+    final_core_profiles = deserialize("core_profiles", tester.receive("core_profiles_o_f").data)
+    assert len(final_core_profiles.time) > 0
+
+
+@pytest.mark.filterwarnings("ignore:.*use of fork():DeprecationWarning")
+def test_torax_reply_equilibrium(muscle3_tester: MuscleTester) -> None:
+    """torax's inner time loop is driven with a real reference equilibrium slice,
+    interpolated to whatever time it requests on o_i, for every step."""
+    config = build_config(
+        {
+            "s": ["equilibrium_s"],
+            "o_i": ["equilibrium_o_i"],
+            "o_f": ["equilibrium_o_f", "core_profiles_o_f"],
+        }
+    )
+    tester = muscle3_tester.start_implementation(config, "torax", default_timeout=120)
+
+    with imas.DBEntry("imas:memory?path=/", "w") as reference_db:
+        reference_db.put(load_ids("equilibrium"))
+
+        while True:
+            request = tester.receive("equilibrium_o_i")
+            reply = reference_db.get_slice(
+                ids_name="equilibrium",
+                time_requested=request.timestamp,
+                interpolation_method=CLOSEST_INTERP,
+            )
+            tester.send(
+                "equilibrium_s",
+                Message(
+                    request.timestamp,
+                    data=reply.serialize(),
+                    next_timestamp=request.next_timestamp,
+                ),
+            )
+            if request.next_timestamp is None:
+                break
+
+    final_equilibrium = deserialize("equilibrium", tester.receive("equilibrium_o_f").data)
+    final_core_profiles = deserialize("core_profiles", tester.receive("core_profiles_o_f").data)
+    assert len(final_equilibrium.time) > 0
+    assert len(final_core_profiles.time) > 0
+
+
+@pytest.mark.filterwarnings("ignore:.*use of fork():DeprecationWarning")
+def test_torax_inner_core_profiles_roundtrip(muscle3_tester: MuscleTester) -> None:
+    """torax's own core_profiles output is echoed straight back through its inner
+    time loop unchanged, exercising the serialize/deserialize round trip."""
+    config = build_config(
+        {
+            "s": ["core_profiles_s"],
+            "o_i": ["core_profiles_o_i"],
+            "o_f": ["equilibrium_o_f", "core_profiles_o_f"],
+        }
+    )
+    tester = muscle3_tester.start_implementation(config, "torax", default_timeout=120)
+
+    while True:
+        request = tester.receive("core_profiles_o_i")
+        tester.send(
+            "core_profiles_s",
+            Message(
+                request.timestamp, data=request.data, next_timestamp=request.next_timestamp
+            ),
+        )
+        if request.next_timestamp is None:
+            break
+
+    final_equilibrium = deserialize("equilibrium", tester.receive("equilibrium_o_f").data)
+    final_core_profiles = deserialize("core_profiles", tester.receive("core_profiles_o_f").data)
+    assert len(final_equilibrium.time) > 0
+    assert len(final_core_profiles.time) > 0

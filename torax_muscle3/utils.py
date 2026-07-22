@@ -11,7 +11,7 @@ from imas.ids_toplevel import IDSToplevel
 from libmuscle import Instance
 from torax._src.geometry.imas import IMASConfig
 import torax
-from ymmsl import SettingValue
+from ymmsl.v0_2 import SettingValue
 
 logger = logging.getLogger()
 
