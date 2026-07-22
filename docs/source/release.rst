@@ -1,7 +1,7 @@
 .. _`release`:
 
 TORAX-MUSCLE3 development and release process
-============================================
+=============================================
 
 TORAX-MUSCLE3 development follows the fork-based model described in
 `the contributing guidelines
@@ -9,7 +9,7 @@ TORAX-MUSCLE3 development follows the fork-based model described in
 
 
 Creating an TORAX-MUSCLE3 release
---------------------------------
+--------------------------------=
 
 1.  Create a Pull Request from ``develop`` to ``main``.
 2.  Add a change log to the Pull Request, briefly describing new features, bug fixes,

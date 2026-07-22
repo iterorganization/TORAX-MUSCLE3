@@ -13,5 +13,5 @@ TORAX-MUSCLE3
    :recursive:
    :template: custom-module-template.rst
 
-   torax-m3
+   torax_muscle3
    

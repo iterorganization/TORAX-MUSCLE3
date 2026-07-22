@@ -27,6 +27,7 @@ Manual
    self
    installing
    usage
+   ids_fields
    changelog
 
 .. toctree::
@@ -49,7 +50,7 @@ Manual
 LICENSE
 -------
 
-.. literalinclude:: ../../LICENSE.md
+.. literalinclude:: ../../LICENSE.txt
    :language: text
 
 
