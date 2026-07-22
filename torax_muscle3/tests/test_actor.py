@@ -35,7 +35,9 @@ CONFIG_PATH = TESTS_DIR / "basic_config.py"
 # ---------------------------------------------------------------------------
 
 
-def build_config(ports: Dict[str, Any], settings: Optional[Dict[str, Any]] = None) -> str:
+def build_config(
+    ports: Dict[str, Any], settings: Optional[Dict[str, Any]] = None
+) -> str:
     """Build a v0.2 yMMSL config for the torax program with only the given ports declared.
 
     Restricting the declared ports controls exactly which ports
@@ -78,7 +80,10 @@ def test_torax_runs_from_initial_equilibrium(muscle3_tester: MuscleTester) -> No
     """torax builds its initial state from an externally supplied equilibrium and
     free-runs to completion without further MUSCLE3 exchanges."""
     config = build_config(
-        {"f_init": ["equilibrium_in_f"], "o_f": ["equilibrium_out_f", "core_profiles_out_f"]},
+        {
+            "f_init": ["equilibrium_in_f"],
+            "o_f": ["equilibrium_out_f", "core_profiles_out_f"],
+        },
         # The test equilibrium has a single time point, which would otherwise
         # collapse torax's auto-derived simulation window to zero length.
         settings={"torax.t_initial": 0, "torax.t_final": 5},
@@ -88,8 +93,12 @@ def test_torax_runs_from_initial_equilibrium(muscle3_tester: MuscleTester) -> No
     equilibrium_ids = load_ids(EQUILIBRIUM_DATA_PATH, "equilibrium")
     tester.send("equilibrium_in_f", Message(0.0, data=equilibrium_ids.serialize()))
 
-    final_equilibrium = deserialize("equilibrium", tester.receive("equilibrium_out_f").data)
-    final_core_profiles = deserialize("core_profiles", tester.receive("core_profiles_out_f").data)
+    final_equilibrium = deserialize(
+        "equilibrium", tester.receive("equilibrium_out_f").data
+    )
+    final_core_profiles = deserialize(
+        "core_profiles", tester.receive("core_profiles_out_f").data
+    )
     assert len(final_equilibrium.time) > 0
     assert len(final_core_profiles.time) > 0
 
@@ -99,15 +108,22 @@ def test_torax_input_core_sources(muscle3_tester: MuscleTester) -> None:
     """torax applies externally supplied core_sources at f_init and free-runs to
     completion using its own config for everything else."""
     config = build_config(
-        {"f_init": ["core_sources_in_f"], "o_f": ["equilibrium_out_f", "core_profiles_out_f"]}
+        {
+            "f_init": ["core_sources_in_f"],
+            "o_f": ["equilibrium_out_f", "core_profiles_out_f"],
+        }
     )
     tester = muscle3_tester.start_implementation(config, "torax", default_timeout=120)
 
     core_sources_ids = load_ids(CORE_SOURCES_DATA_PATH, "core_sources")
     tester.send("core_sources_in_f", Message(0.0, data=core_sources_ids.serialize()))
 
-    final_equilibrium = deserialize("equilibrium", tester.receive("equilibrium_out_f").data)
-    final_core_profiles = deserialize("core_profiles", tester.receive("core_profiles_out_f").data)
+    final_equilibrium = deserialize(
+        "equilibrium", tester.receive("equilibrium_out_f").data
+    )
+    final_core_profiles = deserialize(
+        "core_profiles", tester.receive("core_profiles_out_f").data
+    )
     assert len(final_equilibrium.time) > 0
     assert len(final_core_profiles.time) > 0
 
@@ -119,7 +135,9 @@ def test_torax_output_equilibrium(muscle3_tester: MuscleTester) -> None:
     config = build_config({"o_f": ["equilibrium_out_f"]})
     tester = muscle3_tester.start_implementation(config, "torax", default_timeout=120)
 
-    final_equilibrium = deserialize("equilibrium", tester.receive("equilibrium_out_f").data)
+    final_equilibrium = deserialize(
+        "equilibrium", tester.receive("equilibrium_out_f").data
+    )
     assert len(final_equilibrium.time) > 0
 
 
@@ -130,7 +148,9 @@ def test_torax_output_core_profiles(muscle3_tester: MuscleTester) -> None:
     config = build_config({"o_f": ["core_profiles_out_f"]})
     tester = muscle3_tester.start_implementation(config, "torax", default_timeout=120)
 
-    final_core_profiles = deserialize("core_profiles", tester.receive("core_profiles_out_f").data)
+    final_core_profiles = deserialize(
+        "core_profiles", tester.receive("core_profiles_out_f").data
+    )
     assert len(final_core_profiles.time) > 0
 
 
@@ -168,8 +188,12 @@ def test_torax_reply_equilibrium(muscle3_tester: MuscleTester) -> None:
             if request.next_timestamp is None:
                 break
 
-    final_equilibrium = deserialize("equilibrium", tester.receive("equilibrium_out_f").data)
-    final_core_profiles = deserialize("core_profiles", tester.receive("core_profiles_out_f").data)
+    final_equilibrium = deserialize(
+        "equilibrium", tester.receive("equilibrium_out_f").data
+    )
+    final_core_profiles = deserialize(
+        "core_profiles", tester.receive("core_profiles_out_f").data
+    )
     assert len(final_equilibrium.time) > 0
     assert len(final_core_profiles.time) > 0
 
@@ -192,14 +216,20 @@ def test_torax_inner_core_profiles_roundtrip(muscle3_tester: MuscleTester) -> No
         tester.send(
             "core_profiles_in_s",
             Message(
-                request.timestamp, data=request.data, next_timestamp=request.next_timestamp
+                request.timestamp,
+                data=request.data,
+                next_timestamp=request.next_timestamp,
             ),
         )
         if request.next_timestamp is None:
             break
 
-    final_equilibrium = deserialize("equilibrium", tester.receive("equilibrium_out_f").data)
-    final_core_profiles = deserialize("core_profiles", tester.receive("core_profiles_out_f").data)
+    final_equilibrium = deserialize(
+        "equilibrium", tester.receive("equilibrium_out_f").data
+    )
+    final_core_profiles = deserialize(
+        "core_profiles", tester.receive("core_profiles_out_f").data
+    )
     assert len(final_equilibrium.time) > 0
     assert len(final_core_profiles.time) > 0
 
