@@ -52,7 +52,7 @@ dependencies = [
     "packaging",
     "torax[dev]==1.4.0",
     "imas-python",
-    "muscle3==0.8.0",
+    "muscle3>=0.10",
 ]
 
 [project.optional-dependencies]
