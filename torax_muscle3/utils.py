@@ -122,12 +122,19 @@ class ToraxActorSettings:
     read once per reuse instance loop."""
 
     python_config_module: str
+    """Dotted import path to the TORAX config module to run."""
     communication_interval: float = 1e-6
+    """Sim-time interval between muscle3 messages."""
     output_all_timeslices: bool = False
+    """Send every internal TORAX timeslice instead of just the requested one."""
     use_IDS_plasma_composition: bool = False
+    """Take plasma composition from the incoming IDS rather than the config."""
     t_initial: Optional[float] = None
+    """Override for the config's initial simulation time."""
     t_final: Optional[float] = None
+    """Override for the config's final simulation time."""
     fixed_dt: Optional[float] = None
+    """Override for the config's fixed timestep."""
 
     @property
     def explicit_numerics(self) -> Dict[str, Optional[float]]:
@@ -138,24 +145,26 @@ class ToraxActorSettings:
             "fixed_dt": self.fixed_dt,
         }
 
-
-def read_settings(instance: Instance) -> ToraxActorSettings:
-    """Read every ymmsl setting the TORAX actor uses into one settings object."""
-    return ToraxActorSettings(
-        python_config_module=cast(str, instance.get_setting("python_config_module")),
-        communication_interval=get_setting_optional(
-            instance, "communication_interval", 1e-6
-        ),
-        output_all_timeslices=get_setting_optional(
-            instance, "output_all_timeslices", False
-        ),
-        use_IDS_plasma_composition=get_setting_optional(
-            instance, "use_IDS_plasma_composition", False
-        ),
-        t_initial=get_setting_optional(instance, "t_initial", None),
-        t_final=get_setting_optional(instance, "t_final", None),
-        fixed_dt=get_setting_optional(instance, "fixed_dt", None),
-    )
+    @classmethod
+    def from_instance(cls, instance: Instance) -> "ToraxActorSettings":
+        """Read every ymmsl setting the TORAX actor uses into one settings object."""
+        return cls(
+            python_config_module=cast(
+                str, instance.get_setting("python_config_module")
+            ),
+            communication_interval=get_setting_optional(
+                instance, "communication_interval", 1e-6
+            ),
+            output_all_timeslices=get_setting_optional(
+                instance, "output_all_timeslices", False
+            ),
+            use_IDS_plasma_composition=get_setting_optional(
+                instance, "use_IDS_plasma_composition", False
+            ),
+            t_initial=get_setting_optional(instance, "t_initial", None),
+            t_final=get_setting_optional(instance, "t_final", None),
+            fixed_dt=get_setting_optional(instance, "fixed_dt", None),
+        )
 
 
 def merge_extra_vars(

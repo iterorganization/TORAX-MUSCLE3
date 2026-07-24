@@ -60,7 +60,6 @@ from torax_muscle3.utils import (
     merge_extra_vars,
     create_light_equilibrium,
     get_port_list,
-    read_settings,
 )
 
 logger = logging.getLogger()
@@ -309,7 +308,7 @@ class ToraxMuscleRunner:
 
     def run_prep(self, torax_config: Optional[ToraxConfig] = None) -> None:
         """Prepare a TORAX simulation based on torax config and MUSCLE3 settings"""
-        self.settings = read_settings(self.instance)
+        self.settings = ToraxActorSettings.from_instance(self.instance)
         if torax_config is None:
             # load config file from path
             self.torax_config = build_torax_config_from_file(
