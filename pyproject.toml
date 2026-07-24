@@ -73,7 +73,7 @@ test = [
     "pytest-randomly",
 ]
 linting = [
-    "ruff",
+    "ruff~=0.15.0",
     "mypy",
 ]
 
