@@ -149,7 +149,7 @@ class ToraxActorSettings:
     def from_instance(cls, instance: Instance) -> "ToraxActorSettings":
         """Read every ymmsl setting the TORAX actor uses into one settings object."""
         return cls(
-            python_config_module=instance.get_setting("python_config_module", 'str'),
+            python_config_module=instance.get_setting("python_config_module", "str"),
             communication_interval=get_setting_optional(
                 instance, "communication_interval", 1e-6
             ),
