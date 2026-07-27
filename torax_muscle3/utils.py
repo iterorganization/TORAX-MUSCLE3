@@ -3,6 +3,7 @@ Utility functions for muscle3 and torax.
 """
 
 import logging
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, TypeVar, cast, TYPE_CHECKING, overload
 import torax
 
@@ -113,6 +114,55 @@ def get_setting_optional(
     except KeyError:
         setting = default
     return setting
+
+
+@dataclass
+class ToraxActorSettings:
+    """Every ymmsl setting the TORAX actor reads, gathered in one place and
+    read once per reuse instance loop."""
+
+    python_config_module: str
+    """Dotted import path to the TORAX config module to run."""
+    communication_interval: float = 1e-6
+    """Sim-time interval between muscle3 messages."""
+    output_all_timeslices: bool = False
+    """Send every internal TORAX timeslice instead of just the requested one."""
+    use_IDS_plasma_composition: bool = False
+    """Take plasma composition from the incoming IDS rather than the config."""
+    t_initial: Optional[float] = None
+    """Override for the config's initial simulation time."""
+    t_final: Optional[float] = None
+    """Override for the config's final simulation time."""
+    fixed_dt: Optional[float] = None
+    """Override for the config's fixed timestep."""
+
+    @property
+    def explicit_numerics(self) -> Dict[str, Optional[float]]:
+        """Numerics explicitly set in the ymmsl settings (None when unset)."""
+        return {
+            "t_initial": self.t_initial,
+            "t_final": self.t_final,
+            "fixed_dt": self.fixed_dt,
+        }
+
+    @classmethod
+    def from_instance(cls, instance: Instance) -> "ToraxActorSettings":
+        """Read every ymmsl setting the TORAX actor uses into one settings object."""
+        return cls(
+            python_config_module=instance.get_setting("python_config_module", "str"),
+            communication_interval=get_setting_optional(
+                instance, "communication_interval", 1e-6
+            ),
+            output_all_timeslices=get_setting_optional(
+                instance, "output_all_timeslices", False
+            ),
+            use_IDS_plasma_composition=get_setting_optional(
+                instance, "use_IDS_plasma_composition", False
+            ),
+            t_initial=get_setting_optional(instance, "t_initial", None),
+            t_final=get_setting_optional(instance, "t_final", None),
+            fixed_dt=get_setting_optional(instance, "fixed_dt", None),
+        )
 
 
 def merge_extra_vars(

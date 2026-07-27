@@ -55,17 +55,14 @@ import inspect
 
 from torax_muscle3.utils import (
     ExtraVarCollection,
+    ToraxActorSettings,
     get_geometry_config_dict,
-    get_setting_optional,
     merge_extra_vars,
     create_light_equilibrium,
     get_port_list,
 )
 
 logger = logging.getLogger()
-
-#: numerics settings that may be set explicitly through ymmsl settings
-NUMERICS_SETTINGS = ("t_initial", "t_final", "fixed_dt")
 
 
 def numerics_overrides(
@@ -132,16 +129,12 @@ class ToraxMuscleRunner:
 
     first_run: bool = True
     """Whether this is the first reuse_instance loop"""
-    output_all_timeslices: bool = False
-    """Whether to combine all timeslices at once in the final output"""
+    settings: ToraxActorSettings
+    """All ymmsl settings read by this actor, read once in run_prep"""
     db_out: DBEntry
     """IMAS DBEntry for gathering the timeslices if output_all_timeslices is True"""
     torax_config: ToraxConfig
     """ToraxConfig object"""
-    communication_interval: float
-    """Interval for communication through MUSCLE3 ports"""
-    use_IDS_plasma_composition: bool = False
-    """Whether to use plasma composition from input core_profiles IDS on f_init or from TORAX config"""
     step_fn: SimulationStepFn
     """Torax step_function object"""
     geometry_provider: torax_experimental.geometry.StandardGeometryProvider
@@ -188,7 +181,10 @@ class ToraxMuscleRunner:
                 self.run_f_init()
             while not self.step_fn.is_done(self.t_cur):
                 self.t_next_inner = self.get_t_next()
-                if self.t_cur >= self.last_communication + self.communication_interval:
+                if (
+                    self.t_cur
+                    >= self.last_communication + self.settings.communication_interval
+                ):
                     self.run_o_i()
                     self.run_s()
                     self.last_communication = self.t_cur
@@ -232,7 +228,7 @@ class ToraxMuscleRunner:
         self.extra_var_col = ExtraVarCollection.model_validate(
             msg.data[0]["extra_var_col"]
         )
-        if self.output_all_timeslices:
+        if self.settings.output_all_timeslices:
             self.db_out = DBEntry("imas:memory?path=/db_out/", "w")
             for ids_name, obj in msg.data[0]["db_out"].items():
                 ids = self.db_out.factory.new(ids_name)
@@ -254,9 +250,8 @@ class ToraxMuscleRunner:
                 self.sim_state,
                 self.post_processed_outputs,
             )
-            config_module_str = self.instance.get_setting("python_config_module")
             my_torax_config = build_torax_config_from_file(
-                path=config_module_str,
+                path=self.settings.python_config_module,
             )
             data_tree = StateHistory(
                 state_history=[self.sim_state],
@@ -298,7 +293,7 @@ class ToraxMuscleRunner:
                             for port in get_port_list(self.instance, Operator.O_F)
                         ]
                     }
-                    if self.output_all_timeslices
+                    if self.settings.output_all_timeslices
                     else None,
                     "equilibrium_t_range": self.equilibrium_t_range,
                 }
@@ -313,20 +308,11 @@ class ToraxMuscleRunner:
 
     def run_prep(self, torax_config: Optional[ToraxConfig] = None) -> None:
         """Prepare a TORAX simulation based on torax config and MUSCLE3 settings"""
-        self.communication_interval = get_setting_optional(
-            self.instance, "communication_interval", 1e-6
-        )
-        self.output_all_timeslices = get_setting_optional(
-            self.instance, "output_all_timeslices", False
-        )
-        self.use_IDS_plasma_composition = get_setting_optional(
-            self.instance, "use_IDS_plasma_composition", False
-        )
+        self.settings = ToraxActorSettings.from_instance(self.instance)
         if torax_config is None:
             # load config file from path
-            config_module_str = self.instance.get_setting("python_config_module")
             self.torax_config = build_torax_config_from_file(
-                path=config_module_str,
+                path=self.settings.python_config_module,
             )
         else:
             self.torax_config = torax_config
@@ -352,7 +338,7 @@ class ToraxMuscleRunner:
             if self.equilibrium_t_range is not None:
                 self.torax_config.update_fields(
                     numerics_overrides(
-                        self.equilibrium_t_range, self._explicit_ymmsl_numerics()
+                        self.equilibrium_t_range, self.settings.explicit_numerics
                     )
                 )
                 logger.info(
@@ -376,7 +362,7 @@ class ToraxMuscleRunner:
         self.first_run = False
         self.last_communication = -np.inf
 
-        if self.output_all_timeslices:
+        if self.settings.output_all_timeslices:
             self.db_out = DBEntry("imas:memory?path=/db_out/", "w")
             self.db_out.put_slice(self.get_equilibrium_ids())
             self.db_out.put_slice(self.get_core_profiles_ids())
@@ -410,14 +396,17 @@ class ToraxMuscleRunner:
             self.finished = True
             return
 
-        if self.output_all_timeslices:
-            if self.t_cur >= self.last_communication + self.communication_interval:
+        if self.settings.output_all_timeslices:
+            if (
+                self.t_cur
+                >= self.last_communication + self.settings.communication_interval
+            ):
                 self.db_out.put_slice(self.get_equilibrium_ids())
                 self.db_out.put_slice(self.get_core_profiles_ids())
 
     def run_o_f(self) -> None:
         """Send out final state using MUSCLE3 connections"""
-        if self.output_all_timeslices:
+        if self.settings.output_all_timeslices:
             equilibrium_data = self.db_out.get("equilibrium")
             core_profiles_data = self.db_out.get("core_profiles")
             self.db_out.close()
@@ -537,7 +526,7 @@ class ToraxMuscleRunner:
             return
         core_profiles_data, self.t_cur = ids_data
 
-        if port_name == "in_f" and self.use_IDS_plasma_composition:
+        if port_name == "in_f" and self.settings.use_IDS_plasma_composition:
             # Update TORAX config with input plasma composition from received core_profiles IDS.
             plasma_composition = plasma_composition_from_IMAS(
                 core_profiles_data, main_ions_symbols=["H"]
@@ -621,17 +610,10 @@ class ToraxMuscleRunner:
         elif port_name == "in_s":
             self.t_next_inner = t_next
 
-    def _explicit_ymmsl_numerics(self) -> dict:
-        """Numerics explicitly set in the ymmsl settings (None when unset)."""
-        return {
-            name: get_setting_optional(self.instance, name, None)
-            for name in NUMERICS_SETTINGS
-        }
-
     def fix_ymmsl_settings(self) -> None:
         # ymmsl numerics overrides only; sets the base config before any equilibrium
         self.torax_config.update_fields(
-            numerics_overrides(None, self._explicit_ymmsl_numerics())
+            numerics_overrides(None, self.settings.explicit_numerics)
         )
 
 
