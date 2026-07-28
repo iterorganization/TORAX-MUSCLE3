@@ -581,7 +581,9 @@ class ToraxMuscleRunner:
             limit = self.settings.max_consecutive_invalid_input
             logger.warning(
                 "%s: received output_flag=-1 at t=%g (%d consecutive)",
-                key, t_cur, streak,
+                key,
+                t_cur,
+                streak,
             )
             if limit is not None and streak >= limit:
                 raise RuntimeError(
