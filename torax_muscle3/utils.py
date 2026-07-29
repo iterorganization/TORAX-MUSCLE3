@@ -135,6 +135,8 @@ class ToraxActorSettings:
     """Override for the config's final simulation time."""
     fixed_dt: Optional[float] = None
     """Override for the config's fixed timestep."""
+    max_consecutive_invalid_input: Optional[int] = None
+    """Abort if a single port reports output_flag=-1 this many times in a row."""
 
     @property
     def explicit_numerics(self) -> Dict[str, Optional[float]]:
@@ -162,6 +164,9 @@ class ToraxActorSettings:
             t_initial=get_setting_optional(instance, "t_initial", None),
             t_final=get_setting_optional(instance, "t_final", None),
             fixed_dt=get_setting_optional(instance, "fixed_dt", None),
+            max_consecutive_invalid_input=get_setting_optional(
+                instance, "max_consecutive_invalid_input", None
+            ),
         )
 
 

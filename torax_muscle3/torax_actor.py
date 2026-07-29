@@ -166,6 +166,9 @@ class ToraxMuscleRunner:
     def __init__(self) -> None:
         self.get_instance()
         self.extra_var_col = ExtraVarCollection()
+        self._invalid_streak: dict[str, int] = {}
+        """Consecutive output_flag=-1 receives per port, reset on any valid
+        receive. """
 
     def run_sim(self) -> None:
         """Runs a TORAX simulation using the MUSCLE3 actor"""
@@ -570,9 +573,28 @@ class ToraxMuscleRunner:
         ids_data.deserialize(msg.data)
 
         self.update_t_next(t_next, port_name)
+        key = f"{ids_name}_{port_name}"
         # ignore this entry if input source didn't converge
         if ids_data.code.output_flag and ids_data.code.output_flag[0] == -1:
+            streak = self._invalid_streak.get(key, 0) + 1
+            self._invalid_streak[key] = streak
+            limit = self.settings.max_consecutive_invalid_input
+            logger.warning(
+                "%s: received output_flag=-1 at t=%g (%d consecutive)",
+                key,
+                t_cur,
+                streak,
+            )
+            if limit is not None and streak >= limit:
+                raise RuntimeError(
+                    f"{key}: {streak} consecutive invalid (output_flag=-1) inputs, "
+                    f"reached max_consecutive_invalid_input={limit} -- the upstream "
+                    "producer appears stuck resending a rejected/stale step rather than "
+                    "recovering, so this is no longer a transient condition worth "
+                    "silently tolerating."
+                )
             return None
+        self._invalid_streak[key] = 0
         return ids_data, t_cur
 
     def send_ids(self, ids: IDSToplevel, ids_name: str, port_name: str) -> None:
