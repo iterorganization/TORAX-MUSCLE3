@@ -35,6 +35,24 @@ Available Settings
   - **t_final**: (float) ending time of TORAX actor.
   - **fixed_dt**: (float) timestep of TORAX actor.
   - **communication_interval**: (float) time interval at which to send/receive data through MUSCLE3 connections. Common to all connected ports. Defaults to 1e-6 seconds.
+  - **max_consecutive_invalid_input**: (int) abort the run if a single port receives ``output_flag == -1`` this many times in a row. Defaults to unset, i.e. tolerate invalid input indefinitely. See `Handling invalid input`_ below.
+
+Handling invalid input
+----------------------
+
+Each received IDS carries ``code.output_flag``; a value of ``-1`` marks it as
+invalid (e.g. the upstream producer's solve didn't converge for that step) and
+the actor discards it rather than using it to advance the simulation. A
+consecutive-invalid counter is kept per port; it is logged as a warning on
+every invalid receive and reset to zero the next time that port receives a
+valid message.
+
+Occasional invalid input is expected in a co-simulation (a transient
+reject/rollback in the upstream solver) and is tolerated silently by default.
+If ``max_consecutive_invalid_input`` is set and a port's streak reaches it, the
+actor raises instead of continuing to wait — this catches an upstream producer
+that is stuck resending a rejected/stale step rather than recovering, which
+would otherwise silently loop until some other timeout.
 
 Simulated time window
 ---------------------
