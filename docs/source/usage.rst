@@ -29,7 +29,7 @@ Available Settings
 
 * Optional
 
-  - **output_all_timeslices**: (string) IMAS Data Dictionary version number to which data will be converted. Defaults to original dd_version of the data.
+  - **output_all_timeslices**: (string) Whether to send every internal TORAX timeslice as final O_F output instead of just the requested one. Defaults to False.
   - **use_IDS_plasma_composition**: (bool) whether to use plasma composition from input core_profiles IDS on F_INIT or from TORAX config. Defaults to False (i.e. use TORAX config).
   - **t_initial**: (float) starting time of TORAX actor.
   - **t_final**: (float) ending time of TORAX actor.
