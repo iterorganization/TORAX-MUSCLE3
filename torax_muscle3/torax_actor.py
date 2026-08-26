@@ -197,6 +197,14 @@ class ToraxMuscleRunner:
                 if self.finished:
                     break
                 self.save_snapshot()
+            if not self.finished:
+                # The loop above never predicts next_timestamp=None itself (see
+                # get_t_next()) -- send the real, authoritative end-of-stream message
+                # now that step_fn.is_done() is confirmed on the actual (not
+                # predicted) final state, once per reuse_instance() pass.
+                self.t_next_inner = None
+                self.run_o_i()
+                self.run_s()
             self.run_o_f()
             self.save_final_snapshot()
 
@@ -617,8 +625,9 @@ class ToraxMuscleRunner:
         msg = Message(self.t_cur, data=ids.serialize(), next_timestamp=t_next)
         self.instance.send(f"{ids_name}_{port_name}", msg)
 
-    def get_t_next(self) -> Optional[float]:
-        """Calculate expected next timestamp in time loop"""
+    def get_t_next(self) -> float:
+        """Calculate the expected timestamp of the step about to be taken.
+        """
         runtime_params_t, geo_t = get_consistent_runtime_params_and_geometry(
             t=self.sim_state.t,
             runtime_params_provider=self.runtime_params_provider,
@@ -629,10 +638,7 @@ class ToraxMuscleRunner:
             runtime_params_t,
             self.sim_state,
         )
-        t_next = self.sim_state.t + dt
-        if t_next >= self.t_final:
-            t_next = None
-        return t_next
+        return self.sim_state.t + dt
 
     def update_t_next(self, t_next: Optional[float], port_name: str) -> None:
         """Update t_next to given value"""
