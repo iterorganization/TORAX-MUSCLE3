@@ -169,6 +169,8 @@ class ToraxMuscleRunner:
         self._invalid_streak: dict[str, int] = {}
         """Consecutive output_flag=-1 receives per port, reset on any valid
         receive. """
+        self._finished_ports: set[str] = set()
+        """Ports on which the peer has sent its final message (next_timestamp=None)."""
 
     def run_sim(self) -> None:
         """Runs a TORAX simulation using the MUSCLE3 actor"""
@@ -195,6 +197,14 @@ class ToraxMuscleRunner:
                 if self.finished:
                     break
                 self.save_snapshot()
+            if not self.finished:
+                # The loop above never predicts next_timestamp=None itself (see
+                # get_t_next()) -- send the real, authoritative end-of-stream message
+                # now that step_fn.is_done() is confirmed on the actual (not
+                # predicted) final state, once per reuse_instance() pass.
+                self.t_next_inner = None
+                self.run_o_i()
+                self.run_s()
             self.run_o_f()
             self.save_final_snapshot()
 
@@ -564,16 +574,23 @@ class ToraxMuscleRunner:
         self, ids_name: str, port_name: str
     ) -> Optional[Tuple[IDSToplevel, float]]:
         """Receive IDS message through MUSCLE3"""
-        if not self.instance.is_connected(f"{ids_name}_{port_name}"):
+        key = f"{ids_name}_{port_name}"
+        if not self.instance.is_connected(key):
             return None
-        msg = self.instance.receive(f"{ids_name}_{port_name}")
+        if key in self._finished_ports:
+            # Peer already sent its final message (next_timestamp=None) on this
+            # port -- keep running with the last received state instead of
+            # receiving again on a port the peer may have since closed.
+            return None
+        msg = self.instance.receive(key)
         t_cur = msg.timestamp
         t_next = msg.next_timestamp
         ids_data = getattr(IDSFactory(), ids_name)()
         ids_data.deserialize(msg.data)
 
         self.update_t_next(t_next, port_name)
-        key = f"{ids_name}_{port_name}"
+        if t_next is None:
+            self._finished_ports.add(key)
         # ignore this entry if input source didn't converge
         if ids_data.code.output_flag and ids_data.code.output_flag[0] == -1:
             streak = self._invalid_streak.get(key, 0) + 1
@@ -608,8 +625,8 @@ class ToraxMuscleRunner:
         msg = Message(self.t_cur, data=ids.serialize(), next_timestamp=t_next)
         self.instance.send(f"{ids_name}_{port_name}", msg)
 
-    def get_t_next(self) -> Optional[float]:
-        """Calculate expected next timestamp in time loop"""
+    def get_t_next(self) -> float:
+        """Calculate the expected timestamp of the step about to be taken."""
         runtime_params_t, geo_t = get_consistent_runtime_params_and_geometry(
             t=self.sim_state.t,
             runtime_params_provider=self.runtime_params_provider,
@@ -620,10 +637,7 @@ class ToraxMuscleRunner:
             runtime_params_t,
             self.sim_state,
         )
-        t_next = self.sim_state.t + dt
-        if t_next >= self.t_final:
-            t_next = None
-        return t_next
+        return self.sim_state.t + dt
 
     def update_t_next(self, t_next: Optional[float], port_name: str) -> None:
         """Update t_next to given value"""
