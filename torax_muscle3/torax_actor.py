@@ -626,8 +626,7 @@ class ToraxMuscleRunner:
         self.instance.send(f"{ids_name}_{port_name}", msg)
 
     def get_t_next(self) -> float:
-        """Calculate the expected timestamp of the step about to be taken.
-        """
+        """Calculate the expected timestamp of the step about to be taken."""
         runtime_params_t, geo_t = get_consistent_runtime_params_and_geometry(
             t=self.sim_state.t,
             runtime_params_provider=self.runtime_params_provider,
