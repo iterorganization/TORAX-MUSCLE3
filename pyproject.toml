@@ -50,7 +50,7 @@ dependencies = [
     "importlib_resources",
     "rich",
     "packaging",
-    "torax[dev]==1.4.0",
+    "torax[dev]==1.4.3",
     "imas-python",
     "muscle3>=0.10",
 ]
