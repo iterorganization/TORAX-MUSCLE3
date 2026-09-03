@@ -471,6 +471,7 @@ class ToraxMuscleRunner:
     def get_core_sources_ids(self) -> IDSToplevel:
         """Get core_sources IDS from torax state"""
         core_sources_data = core_sources_to_IMAS(
+            [self.sim_state.core_profiles],
             [self.sim_state.core_sources],
             [self.sim_state.geometry],
             [self.sim_state.t],
