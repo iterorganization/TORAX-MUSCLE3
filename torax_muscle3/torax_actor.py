@@ -47,6 +47,7 @@ from torax._src.imas_tools.input.core_profiles import (
     plasma_composition_from_IMAS,
 )
 from torax._src.imas_tools.output.core_profiles import core_profiles_to_IMAS
+from torax._src.imas_tools.output.core_sources import core_sources_to_IMAS
 from torax._src.imas_tools.output.equilibrium import torax_state_to_imas_equilibrium
 from torax._src.simulation_app import _write_simulation_output_to_dir
 from torax._src.output_tools.output import StateHistory
@@ -384,6 +385,7 @@ class ToraxMuscleRunner:
         """Send out time loop state using MUSCLE3 connections"""
         self.send_ids(self.get_equilibrium_ids(), "equilibrium", "out_i")
         self.send_ids(self.get_core_profiles_ids(), "core_profiles", "out_i")
+        self.send_ids(self.get_core_sources_ids(), "core_sources", "out_i")
 
     def run_s(self) -> None:
         """Update time loop state using MUSCLE3 connections"""
@@ -422,12 +424,15 @@ class ToraxMuscleRunner:
         if self.settings.output_all_timeslices:
             equilibrium_data = self.db_out.get("equilibrium")
             core_profiles_data = self.db_out.get("core_profiles")
+            core_sources_data = self.db_out.get("core_sources")
             self.db_out.close()
         else:
             equilibrium_data = self.get_equilibrium_ids()
             core_profiles_data = self.get_core_profiles_ids()
+            core_sources_data = self.get_core_sources_ids()
         self.send_ids(equilibrium_data, "equilibrium", "out_f")
         self.send_ids(core_profiles_data, "core_profiles", "out_f")
+        self.send_ids(core_sources_data, "core_sources", "out_f")
 
     def get_instance(self) -> None:
         """Initialize MUSCLE3 instance and set up connection ports"""
@@ -462,6 +467,15 @@ class ToraxMuscleRunner:
             [self.sim_state.t],
         )
         return core_profiles_data
+
+    def get_core_sources_ids(self) -> IDSToplevel:
+        """Get core_sources IDS from torax state"""
+        core_sources_data = core_sources_to_IMAS(
+            [self.sim_state.core_sources],
+            [self.sim_state.geometry],
+            [self.sim_state.t],
+        )
+        return core_sources_data
 
     def receive_equilibrium(self, port_name: str) -> None:
         """Receive equilibrium IDS through MUSCLE3 connections"""
