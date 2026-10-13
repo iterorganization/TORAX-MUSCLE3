@@ -64,6 +64,9 @@ from torax_muscle3.utils import (
 
 logger = logging.getLogger()
 
+#: time [s] within which a step counts as having reached its announced t_target
+T_TARGET_TOLERANCE = 1e-9
+
 
 def numerics_overrides(
     equilibrium_t_range: Optional[Tuple[float, float]],
@@ -153,6 +156,8 @@ class ToraxMuscleRunner:
     """Last time value of simulation"""
     t_next_inner: Optional[float] = None
     """Next expected output timestamp for inner time loop"""
+    t_target: float
+    """Announced time the current step must land on (run_s overwrites t_next_inner)"""
     t_next_outer: Optional[float] = None
     """Next expected final output timestamp for reuse_instance loop"""
     finished: bool = False
@@ -186,6 +191,7 @@ class ToraxMuscleRunner:
                 self.run_f_init()
             while not self.step_fn.is_done(self.t_cur):
                 self.t_next_inner = self.get_t_next()
+                self.t_target = self.t_next_inner
                 if (
                     self.t_cur
                     >= self.last_communication + self.settings.communication_interval
@@ -398,30 +404,24 @@ class ToraxMuscleRunner:
         self.receive_core_sources(port_name="in_s")
 
     def run_timestep(self) -> None:
-        """Evolve time loop state using the TORAX step function"""
+        """Evolve time loop state to exactly the announced t_target. A sawtooth crash
+        is an extra short sub-step that would otherwise break the announced
+        next_timestamp, so sub-steps are taken until t_target is reached."""
         last_state = (self.sim_state, self.post_processed_outputs)
-        self.sim_state, self.post_processed_outputs = self.step_fn(
-            self.sim_state,
-            self.post_processed_outputs,
-            geo_overrides=self.geometry_provider,
-            runtime_params_overrides=self.runtime_params_provider,
-        )
-        sim_error = self.step_fn.check_for_errors(
-            self.sim_state,
-            self.post_processed_outputs,
-        )
-        self.t_cur = self.sim_state.t
-
-        if sim_error != SimError.NO_ERROR:
-            sim_error.log_error()
-            logger.error(
-                "TORAX step failed: SimError.%s at t=%g s", sim_error.name, self.t_cur
-            )
-            # Discard the failed step, keep the last accepted state.
-            self.sim_state, self.post_processed_outputs = last_state
-            self.t_cur = self.sim_state.t
-            self.finished = True
-            return
+        while self.t_target - self.t_cur > T_TARGET_TOLERANCE:
+            sim_error = self.run_substep(self.t_target - self.t_cur)
+            if sim_error != SimError.NO_ERROR:
+                sim_error.log_error()
+                logger.error(
+                    "TORAX step failed: SimError.%s at t=%g s",
+                    sim_error.name,
+                    self.t_cur,
+                )
+                # Discard the failed step, keep the last accepted state.
+                self.sim_state, self.post_processed_outputs = last_state
+                self.t_cur = self.sim_state.t
+                self.finished = True
+                return
 
         if self.settings.output_all_timeslices:
             if (
@@ -430,6 +430,21 @@ class ToraxMuscleRunner:
             ):
                 self.db_out.put_slice(self.get_equilibrium_ids())
                 self.db_out.put_slice(self.get_core_profiles_ids())
+
+    def run_substep(self, max_dt: float) -> SimError:
+        """Take one TORAX step of at most max_dt"""
+        self.sim_state, self.post_processed_outputs = self.step_fn(
+            self.sim_state,
+            self.post_processed_outputs,
+            max_dt=max_dt,
+            geo_overrides=self.geometry_provider,
+            runtime_params_overrides=self.runtime_params_provider,
+        )
+        self.t_cur = self.sim_state.t
+        return self.step_fn.check_for_errors(
+            self.sim_state,
+            self.post_processed_outputs,
+        )
 
     def run_o_f(self) -> None:
         """Send out final state using MUSCLE3 connections"""
