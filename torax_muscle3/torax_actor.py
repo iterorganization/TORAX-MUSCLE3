@@ -498,7 +498,7 @@ class ToraxMuscleRunner:
         if ids_data is None:
             # Ignore if port is not connected or if input source didn't converge.
             return
-        equilibrium_data, self.t_cur = ids_data
+        equilibrium_data, _ = ids_data
 
         geometry_configs = {}
         torax_config_dict = get_geometry_config_dict(self.torax_config)
@@ -566,7 +566,7 @@ class ToraxMuscleRunner:
         if ids_data is None:
             # Ignore if port is not connected or if input source didn't converge.
             return
-        core_profiles_data, self.t_cur = ids_data
+        core_profiles_data, _ = ids_data
 
         if port_name == "in_f" and self.settings.use_IDS_plasma_composition:
             # Update TORAX config with input plasma composition from received core_profiles IDS.
@@ -589,7 +589,7 @@ class ToraxMuscleRunner:
         if ids_data is None:
             # Ignore if port is not connected or if input source didn't converge.
             return
-        core_sources_data, self.t_cur = ids_data
+        core_sources_data, _ = ids_data
 
         sources = sources_from_IMAS(core_sources_data)
         self.torax_config.update_fields(

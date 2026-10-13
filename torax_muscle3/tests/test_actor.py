@@ -244,7 +244,8 @@ def test_torax_sawtooth_keeps_announced_timestamps(
     muscle3_tester: MuscleTester,
 ) -> None:
     """Every o_i message arrives at the next_timestamp announced by the previous
-    one, even when sawtooth crashes insert extra short sub-steps."""
+    one, even when sawtooth crashes insert extra short sub-steps, and also when
+    the peer timestamps its reply ahead (as temporal_coupler does)."""
     config = build_config(
         {
             "s": ["core_profiles_in_s"],
@@ -264,13 +265,10 @@ def test_torax_sawtooth_keeps_announced_timestamps(
         if announced is not None:
             assert request.timestamp == pytest.approx(announced, abs=1e-9)
         announced = request.next_timestamp
+        reply_t = request.next_timestamp or request.timestamp
         tester.send(
             "core_profiles_in_s",
-            Message(
-                request.timestamp,
-                data=request.data,
-                next_timestamp=request.next_timestamp,
-            ),
+            Message(reply_t, data=request.data, next_timestamp=request.next_timestamp),
         )
         if request.next_timestamp is None:
             break
