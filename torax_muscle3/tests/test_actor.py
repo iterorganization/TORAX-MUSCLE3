@@ -20,6 +20,7 @@ TESTS_DIR = Path(torax_muscle3.__path__[0]) / "tests"
 EQUILIBRIUM_DATA_PATH = TESTS_DIR / "data" / "ITERhybrid_COCOS17_IDS_ddv4.nc"
 CORE_SOURCES_DATA_PATH = TESTS_DIR / "data" / "core_sources_ddv4.nc"
 CONFIG_PATH = TESTS_DIR / "basic_config.py"
+SAWTOOTH_CONFIG_PATH = TESTS_DIR / "sawtooth_config.py"
 
 # ---------------------------------------------------------------------------
 # MuscleTester-based tests: drive the real torax actor directly through the
@@ -232,6 +233,45 @@ def test_torax_inner_core_profiles_roundtrip(muscle3_tester: MuscleTester) -> No
     )
     assert len(final_equilibrium.time) > 0
     assert len(final_core_profiles.time) > 0
+
+
+@pytest.mark.filterwarnings("ignore:.*use of fork():DeprecationWarning")
+def test_torax_sawtooth_keeps_announced_timestamps(
+    muscle3_tester: MuscleTester,
+) -> None:
+    """Every o_i message arrives at the next_timestamp announced by the previous
+    one, even when sawtooth crashes insert extra short sub-steps."""
+    config = build_config(
+        {
+            "s": ["core_profiles_in_s"],
+            "o_i": ["core_profiles_out_i"],
+            "o_f": ["core_profiles_out_f"],
+        },
+        settings={
+            "torax.python_config_module": str(SAWTOOTH_CONFIG_PATH),
+            "torax.t_final": 0.3,
+        },
+    )
+    tester = muscle3_tester.start_implementation(config, "torax", default_timeout=120)
+
+    announced = None
+    while True:
+        request = tester.receive("core_profiles_out_i")
+        if announced is not None:
+            assert request.timestamp == pytest.approx(announced, abs=1e-9)
+        announced = request.next_timestamp
+        tester.send(
+            "core_profiles_in_s",
+            Message(
+                request.timestamp,
+                data=request.data,
+                next_timestamp=request.next_timestamp,
+            ),
+        )
+        if request.next_timestamp is None:
+            break
+
+    tester.receive("core_profiles_out_f")
 
 
 # ---------------------------------------------------------------------------
