@@ -1,3 +1,4 @@
+import copy
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -5,6 +6,7 @@ from typing import Any, Dict, Optional
 import imas
 import libmuscle
 import pytest
+import torax
 import yaml
 import ymmsl
 from imas.ids_defs import CLOSEST_INTERP
@@ -14,7 +16,9 @@ from libmuscle.pytest import MuscleTester
 
 import torax_muscle3
 from torax_muscle3.torax_actor import main as torax_actor
+from torax_muscle3.tests.basic_config import CONFIG as BASIC_CONFIG
 from torax_muscle3.torax_actor import numerics_overrides
+from torax_muscle3.utils import get_geometry_config_dict
 
 TESTS_DIR = Path(torax_muscle3.__path__[0]) / "tests"
 EQUILIBRIUM_DATA_PATH = TESTS_DIR / "data" / "ITERhybrid_COCOS17_IDS_ddv4.nc"
@@ -240,7 +244,8 @@ def test_torax_sawtooth_keeps_announced_timestamps(
     muscle3_tester: MuscleTester,
 ) -> None:
     """Every o_i message arrives at the next_timestamp announced by the previous
-    one, even when sawtooth crashes insert extra short sub-steps."""
+    one, even when sawtooth crashes insert extra short sub-steps, and also when
+    the peer timestamps its reply ahead (as temporal_coupler does)."""
     config = build_config(
         {
             "s": ["core_profiles_in_s"],
@@ -260,13 +265,10 @@ def test_torax_sawtooth_keeps_announced_timestamps(
         if announced is not None:
             assert request.timestamp == pytest.approx(announced, abs=1e-9)
         announced = request.next_timestamp
+        reply_t = request.next_timestamp or request.timestamp
         tester.send(
             "core_profiles_in_s",
-            Message(
-                request.timestamp,
-                data=request.data,
-                next_timestamp=request.next_timestamp,
-            ),
+            Message(reply_t, data=request.data, next_timestamp=request.next_timestamp),
         )
         if request.next_timestamp is None:
             break
@@ -450,3 +452,11 @@ def test_partial_ymmsl_keeps_equilibrium_window():
         "numerics.t_final": 3.25,
         "numerics.fixed_dt": 0.05,
     }
+
+
+def test_geometry_config_keeps_inherited_fields():
+    """n_rho is inherited by IMASConfig and must survive into the IMAS geometry."""
+    config = copy.deepcopy(BASIC_CONFIG)
+    config["geometry"]["n_rho"] = 50
+    config_dict = get_geometry_config_dict(torax.ToraxConfig.model_validate(config))
+    assert config_dict["n_rho"] == 50

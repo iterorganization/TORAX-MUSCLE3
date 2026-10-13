@@ -72,7 +72,8 @@ class ExtraVarCollection(BaseModel):
 
 def get_geometry_config_dict(config: torax.ToraxConfig) -> dict:
     # only get overlapping keys from given config and IMASConfig
-    imas_config_keys = IMASConfig.__annotations__
+    # model_fields includes inherited fields (n_rho, hires_factor, ...)
+    imas_config_keys = IMASConfig.model_fields
     # we can pick a random entry since all fields are time_invariant except hires_fac
     # (which we can ignore) and equilibrium_object (which we overwrite)
     if isinstance(config.geometry.geometry_configs, dict):
