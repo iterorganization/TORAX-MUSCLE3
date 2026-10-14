@@ -164,6 +164,8 @@ class ToraxMuscleRunner:
     """Whether the run_sim function has been run fully"""
     last_communication: float = -np.inf
     """Last timestamp for which the MUSCLE3 communication was done"""
+    last_inner_geometry: Optional[GeometryConfig] = None
+    """Geometry of the last equilibrium slice received on in_s"""
     equilibrium_t_range: Optional[Tuple[float, float]] = None
     """(t_initial, t_final) taken from the equilibrium sequence received on in_f,
     or None when no equilibrium is connected. Set in receive_equilibrium."""
@@ -542,6 +544,10 @@ class ToraxMuscleRunner:
                 )
         # temp extra vars code
         self.extra_var_col.pad_extra_vars()
+        if port_name == "in_s" and len(geometry_configs) == 1:
+            geometry_configs = self.stepwise_geometry_configs(
+                next(iter(geometry_configs.values()))
+            )
 
         # self.geometry_provider = torax_experimental.geometry.Geometry.from_dict(
         #     {
@@ -559,6 +565,20 @@ class ToraxMuscleRunner:
             }
         )
         self.geometry_provider = self.torax_config.geometry.build_provider
+
+    def stepwise_geometry_configs(
+        self, new_geometry: GeometryConfig
+    ) -> dict[str, GeometryConfig]:
+        """Key the previous in_s slice at t_cur and the new one at t_target, so TORAX
+        sees the geometry change during the step instead of a jump between steps."""
+        # a copy: TORAX's config tree rejects the same object appearing twice
+        previous = (self.last_inner_geometry or new_geometry).model_copy(deep=True)
+        self.last_inner_geometry = new_geometry
+        t_cur = float(self.t_cur)
+        t_target = float(getattr(self, "t_target", t_cur))
+        if t_target <= t_cur:
+            return {str(t_cur): new_geometry}
+        return {str(t_cur): previous, str(t_target): new_geometry}
 
     def receive_core_profiles(self, port_name: str) -> None:
         """Receive core_profiles IDS through MUSCLE3 connections"""
