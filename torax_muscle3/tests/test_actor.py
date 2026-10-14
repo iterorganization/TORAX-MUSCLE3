@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 
 import imas
 import libmuscle
+import pydantic
 import pytest
 import torax
 import yaml
@@ -17,7 +18,7 @@ from libmuscle.pytest import MuscleTester
 import torax_muscle3
 from torax_muscle3.torax_actor import main as torax_actor
 from torax_muscle3.tests.basic_config import CONFIG as BASIC_CONFIG
-from torax_muscle3.torax_actor import numerics_overrides
+from torax_muscle3.torax_actor import ToraxMuscleRunner, numerics_overrides
 from torax_muscle3.utils import get_geometry_config_dict
 
 TESTS_DIR = Path(torax_muscle3.__path__[0]) / "tests"
@@ -460,3 +461,22 @@ def test_geometry_config_keeps_inherited_fields():
     config["geometry"]["n_rho"] = 50
     config_dict = get_geometry_config_dict(torax.ToraxConfig.model_validate(config))
     assert config_dict["n_rho"] == 50
+
+
+def test_inner_geometry_spans_the_step():
+    """Each in_s equilibrium becomes the geometry at t_target, with a copy of the
+    previous one kept at t_cur, so TORAX sees the geometry change within the step."""
+
+    class Geo(pydantic.BaseModel):
+        name: str
+
+    a, b, c = Geo(name="a"), Geo(name="b"), Geo(name="c")
+    runner = ToraxMuscleRunner.__new__(ToraxMuscleRunner)
+    runner.t_cur, runner.t_target = 1.0, 1.1
+    configs = runner.stepwise_geometry_configs(a)
+    assert configs == {"1.0": a, "1.1": a} and configs["1.0"] is not a
+    runner.t_cur, runner.t_target = 1.1, 1.2
+    configs = runner.stepwise_geometry_configs(b)
+    assert configs == {"1.1": a, "1.2": b} and configs["1.1"] is not a
+    runner.t_target = 1.1
+    assert runner.stepwise_geometry_configs(c) == {"1.1": c}
