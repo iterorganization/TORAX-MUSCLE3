@@ -67,6 +67,10 @@ logger = logging.getLogger()
 #: time [s] within which a step counts as having reached its announced t_target
 T_TARGET_TOLERANCE = 1e-9
 
+# IMAS source name -> TORAX config field receiving the source's total power when the
+# source carries only a power waveform (no profiles_1d).
+_POWER_ONLY_SOURCES = {"ec": "sources.ecrh.P_total"}
+
 
 def numerics_overrides(
     equilibrium_t_range: Optional[Tuple[float, float]],
@@ -591,13 +595,60 @@ class ToraxMuscleRunner:
             return
         core_sources_data, _ = ids_data
 
+        # Power-only sources are handled first so that sources_from_IMAS does not
+        # see their empty profiles_1d.
+        fields = self.power_only_sources(core_sources_data)
         sources = sources_from_IMAS(core_sources_data)
-        self.torax_config.update_fields(
-            {f"sources.{key}": value for key, value in sources.items()}
-        )
+        fields.update({f"sources.{key}": value for key, value in sources.items()})
+        self.torax_config.update_fields(fields)
         self.runtime_params_provider = RuntimeParamsProvider.from_config(
             self.torax_config
         )
+
+    def power_only_sources(self, ids: IDSToplevel) -> dict:
+        """update_fields entries for sources carrying a power waveform but no profiles.
+
+        A source listed in _POWER_ONLY_SOURCES with global_quantities/power filled and
+        an empty profiles_1d prescribes P_total of the matching TORAX model-based
+        source as a {time: power} dict; the deposition comes from the config's model.
+        The source is renamed so that sources_from_IMAS skips it (it would otherwise
+        create an empty PRESCRIBED source). Fails if the config has no such model.
+        """
+        fields: dict = {}
+        time = np.asarray(ids.time, dtype=float)
+        for source in ids.source:
+            name = str(source.identifier.name)
+            field = _POWER_ONLY_SOURCES.get(name)
+            if field is None or len(source.profiles_1d) > 0:
+                continue
+            power = np.asarray(
+                [gq.power for gq in source.global_quantities], dtype=float
+            )
+            if power.size == 0:
+                continue
+            if power.size != time.size:
+                raise ValueError(
+                    f"core_sources '{name}': {power.size} global_quantities slices "
+                    f"for {time.size} times"
+                )
+            model_name = field.split(".")[1]
+            if getattr(self.torax_config.sources, model_name) is None:
+                raise ValueError(
+                    f"core_sources '{name}' carries a power waveform but the TORAX "
+                    f"config defines no sources.{model_name} model"
+                )
+            fields[field] = {float(t): float(p) for t, p in zip(time, power)}
+            source.identifier.name = f"{name}_power_only"
+            logger.info(
+                "core_sources '%s': %s prescribed from global_quantities/power "
+                "(%d points, %.3g-%.3g MW)",
+                name,
+                field,
+                power.size,
+                power.min() / 1e6,
+                power.max() / 1e6,
+            )
+        return fields
 
     def receive_ids_data(
         self, ids_name: str, port_name: str
