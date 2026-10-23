@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 
 import imas
 import libmuscle
+import numpy as np
 import pydantic
 import pytest
 import torax
@@ -18,7 +19,13 @@ from libmuscle.pytest import MuscleTester
 import torax_muscle3
 from torax_muscle3.torax_actor import main as torax_actor
 from torax_muscle3.tests.basic_config import CONFIG as BASIC_CONFIG
-from torax_muscle3.torax_actor import ToraxMuscleRunner, numerics_overrides
+from torax_muscle3.torax_actor import (
+    ToraxMuscleRunner,
+    ec_deposition_shape,
+    ec_power_density,
+    ec_power_from_imas,
+    numerics_overrides,
+)
 from torax_muscle3.utils import get_geometry_config_dict
 
 TESTS_DIR = Path(torax_muscle3.__path__[0]) / "tests"
@@ -453,6 +460,50 @@ def test_partial_ymmsl_keeps_equilibrium_window():
         "numerics.t_final": 3.25,
         "numerics.fixed_dt": 0.05,
     }
+
+
+def test_ec_power_from_imas():
+    """A power-only 'ec' source is read as (time, power); one with profiles is not."""
+    ids = imas.IDSFactory("4.0.0").core_sources()
+    ids.ids_properties.homogeneous_time = 1
+    ids.time = [0.0, 1.0]
+    ids.source.resize(2)
+    ids.source[0].identifier.name = "ec"
+    ids.source[0].global_quantities.resize(2)
+    for q, p in zip(ids.source[0].global_quantities, [1e6, 2e6]):
+        q.power = p
+    ids.source[1].identifier.name = "ec"
+    ids.source[1].profiles_1d.resize(1)
+    time, power = ec_power_from_imas(ids)
+    assert list(time) == [0.0, 1.0]
+    assert list(power) == [1e6, 2e6]
+
+
+def test_ec_power_density():
+    """The configured ecrh shape is scaled to deposit the received power in each
+    equilibrium's volume, interpolated in time between equilibrium slices."""
+    config = copy.deepcopy(BASIC_CONFIG)
+    rho = np.linspace(0, 1, 201)
+    profile = 1 - rho**2
+    config.setdefault("sources", {})["ecrh"] = {
+        "extra_prescribed_power_density": {0.0: (rho, profile)}
+    }
+    shape = ec_deposition_shape(torax.ToraxConfig.from_dict(config))
+    assert shape is not None
+    np.testing.assert_array_equal(shape[1], profile)
+
+    rho_eq = np.linspace(0, 1, 101)
+    volumes = [(0.0, rho_eq, 100 * rho_eq**2), (2.0, rho_eq, 300 * rho_eq**2)]
+    density = ec_power_density(
+        np.array([0.0, 1.0, 2.0]), np.array([1e6, 2e6, 2e6]), shape, volumes
+    )
+    for t, scale in [(0.0, 100), (1.0, 200), (2.0, 300)]:
+        r, d = density[t]
+        deposited = np.trapezoid(np.interp(rho_eq, r, d), scale * rho_eq**2)
+        np.testing.assert_allclose(deposited, 1e6 if t == 0.0 else 2e6, rtol=1e-4)
+
+    config["sources"]["ecrh"] = {}
+    assert ec_deposition_shape(torax.ToraxConfig.from_dict(config)) is None
 
 
 def test_geometry_config_keeps_inherited_fields():
