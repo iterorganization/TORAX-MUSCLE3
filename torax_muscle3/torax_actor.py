@@ -68,6 +68,55 @@ logger = logging.getLogger()
 T_TARGET_TOLERANCE = 1e-9
 
 
+def ec_power_from_imas(
+    core_sources: IDSToplevel,
+) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+    """(time, power) of the 'ec' sources that carry only global_quantities.power (a
+    waveform, no profiles), summed; None if there are none."""
+    ec_sources = [
+        source
+        for source in core_sources.source
+        if source.identifier.name == "ec"
+        and len(source.profiles_1d) == 0
+        and len(source.global_quantities) > 0
+    ]
+    if not ec_sources:
+        return None
+    homogeneous = core_sources.ids_properties.homogeneous_time == 1
+    gq = ec_sources[0].global_quantities
+    time = np.asarray(core_sources.time if homogeneous else [q.time for q in gq])
+    power = np.sum([[q.power for q in s.global_quantities] for s in ec_sources], axis=0)
+    return time, power
+
+
+def ec_deposition_shape(
+    torax_config: ToraxConfig,
+) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+    """(rho_norm, profile) of the configured ecrh extra_prescribed_power_density, the
+    largest of its time entries; None if it is zero everywhere."""
+    entries = torax_config.sources.ecrh.extra_prescribed_power_density.value.values()
+    rho, profile = max(entries, key=lambda entry: np.sum(np.abs(entry[1])))
+    if not np.any(profile):
+        return None
+    return np.asarray(rho), np.asarray(profile)
+
+
+def ec_power_density(
+    time: np.ndarray,
+    power: np.ndarray,
+    shape: Tuple[np.ndarray, np.ndarray],
+    volumes: list[Tuple[float, np.ndarray, np.ndarray]],
+) -> dict[float, Tuple[np.ndarray, np.ndarray]]:
+    """The deposition shape scaled to deposit power(time) [W], as an
+    extra_prescribed_power_density. volumes holds (time, rho_tor_norm, volume) of the
+    received equilibrium slices, interpolated in time between them."""
+    rho, profile = shape
+    volume_time = [t for t, _, _ in volumes]
+    integral = [np.trapezoid(profile, np.interp(rho, r, v)) for _, r, v in volumes]
+    scale = power / np.interp(time, volume_time, integral)
+    return {float(t): (rho, s * profile) for t, s in zip(time, scale)}
+
+
 def numerics_overrides(
     equilibrium_t_range: Optional[Tuple[float, float]],
     explicit_numerics: dict,
@@ -178,6 +227,8 @@ class ToraxMuscleRunner:
         receive. """
         self._finished_ports: set[str] = set()
         """Ports on which the peer has sent its final message (next_timestamp=None)."""
+        self.equilibrium_volumes: list[Tuple[float, np.ndarray, np.ndarray]] = []
+        """(time, rho_tor_norm, volume) per slice of the last received equilibrium."""
 
     def run_sim(self) -> None:
         """Runs a TORAX simulation using the MUSCLE3 actor"""
@@ -503,6 +554,7 @@ class ToraxMuscleRunner:
         equilibrium_data, _ = ids_data
 
         geometry_configs = {}
+        self.equilibrium_volumes = []
         torax_config_dict = get_geometry_config_dict(self.torax_config)
         torax_config_dict["geometry_type"] = "imas"
         light_equilibrium = create_light_equilibrium(equilibrium_data)
@@ -531,6 +583,14 @@ class ToraxMuscleRunner:
                 imas_cfg = IMASConfig(**config_kwargs)
                 cfg = GeometryConfig(config=imas_cfg)
                 geometry_configs[str(t)] = cfg
+                profiles_1d = my_slice.time_slice[0].profiles_1d
+                self.equilibrium_volumes.append(
+                    (
+                        float(t),
+                        np.asarray(profiles_1d.rho_tor_norm),
+                        np.asarray(profiles_1d.volume),
+                    )
+                )
                 # temp extra vars code
                 self.extra_var_col.add_val(
                     "z_boundary_outline",
@@ -611,10 +671,29 @@ class ToraxMuscleRunner:
             return
         core_sources_data, _ = ids_data
 
-        sources = sources_from_IMAS(core_sources_data)
-        self.torax_config.update_fields(
-            {f"sources.{key}": value for key, value in sources.items()}
-        )
+        sources = dict(sources_from_IMAS(core_sources_data))
+        ec_power = ec_power_from_imas(core_sources_data)
+        updates: dict[str, Any] = {}
+        if ec_power is not None:
+            # A power-only 'ec' drives the configured ecrh model instead of prescribing
+            # (empty) profiles: its extra_prescribed_power_density shape if it has one,
+            # else its Gaussian.
+            sources.pop("ecrh", None)
+            shape = ec_deposition_shape(self.torax_config)
+            if shape is None:
+                updates["sources.ecrh.P_total"] = ec_power
+            elif not self.equilibrium_volumes:
+                raise RuntimeError(
+                    "Scaling the ecrh extra_prescribed_power_density to the received "
+                    "EC power needs an equilibrium on equilibrium_in_f/in_s."
+                )
+            else:
+                updates["sources.ecrh.P_total"] = 0.0
+                updates["sources.ecrh.extra_prescribed_power_density"] = (
+                    ec_power_density(*ec_power, shape, self.equilibrium_volumes)
+                )
+        updates.update({f"sources.{key}": value for key, value in sources.items()})
+        self.torax_config.update_fields(updates)
         self.runtime_params_provider = RuntimeParamsProvider.from_config(
             self.torax_config
         )
