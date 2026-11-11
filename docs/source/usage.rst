@@ -33,7 +33,7 @@ Available Settings
   - **use_IDS_plasma_composition**: (bool) whether to use plasma composition from input core_profiles IDS on F_INIT or from TORAX config. Defaults to False (i.e. use TORAX config).
   - **t_initial**: (float) starting time of TORAX actor.
   - **t_final**: (float) ending time of TORAX actor.
-  - **fixed_dt**: (float) timestep of TORAX actor.
+  - **fixed_dt**: (float) timestep of TORAX actor (``time_step_calculator.dt``, fixed calculator only).
   - **communication_interval**: (float) time interval at which to send/receive data through MUSCLE3 connections. Common to all connected ports. Defaults to 1e-6 seconds.
   - **max_consecutive_invalid_input**: (int) abort the run if a single port receives ``output_flag == -1`` this many times in a row. Defaults to unset, i.e. tolerate invalid input indefinitely. See `Handling invalid input`_ below.
 
@@ -57,11 +57,11 @@ would otherwise silently loop until some other timeout.
 Simulated time window
 ---------------------
 
-The simulated time window (``numerics.t_initial`` / ``numerics.t_final``) is
+The simulated time window (``time_step_calculator.t_initial`` / ``t_final``) is
 resolved from up to three sources, listed from lowest to highest precedence — a
 later source overrides an earlier one key-by-key:
 
-1. the ``numerics`` block in the TORAX config file (``python_config_module``);
+1. the ``time_step_calculator`` block in the TORAX config file (``python_config_module``);
 2. the **first and last** ``time`` of the equilibrium sequence received on
    ``equilibrium_in_f`` on F_INIT, if that port is connected. This lets a coupled
    driver size the run from the data it sends, so the config file needs no
@@ -95,3 +95,25 @@ The Torax actor currently only has IDS coupling functionality for both input and
 General
 -------
 The torax actor can be used with IMAS DDv4.
+
+Equilibrium and core_profiles input
+-----------------------------------
+
+A received equilibrium sets TORAX's geometry and its plasma current
+(``profile_conditions.I_p_source = 'geometry'``). Received core_profiles update
+``profile_conditions`` key by key, but never the ``I_p_source`` /
+``psi_source`` choices, which stay as set in the TORAX config.
+
+To let the equilibrium code own psi (e.g. NICE evolutive with resistive
+diffusion), set in the TORAX config::
+
+   "numerics": {"evolve_current": False},
+   "profile_conditions": {
+       "I_p_source": "geometry",
+       "psi_source": "geometry",
+   },
+
+TORAX then takes psi from every received equilibrium (rebuilt from its
+``j_phi``), and any psi in received core_profiles is ignored. The geometry in the
+config must not be ``circular``; it is a placeholder replaced by the received
+equilibrium.
