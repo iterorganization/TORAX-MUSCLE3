@@ -11,7 +11,7 @@ authors = [
 ]
 description = "TORAX IMAS MUSCLE3 wrapper"
 readme = {file = "README.md", content-type = "text/markdown"}
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = {file = "LICENSE.txt"}
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -50,7 +50,7 @@ dependencies = [
     "importlib_resources",
     "rich",
     "packaging",
-    "torax[dev]==1.4.0",
+    "torax[dev]==2.0.0",
     "imas-python",
     "muscle3>=0.10",
 ]

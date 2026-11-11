@@ -12,7 +12,7 @@ import numpy as np
 from imas import IDSFactory
 from imas.ids_toplevel import IDSToplevel
 from libmuscle import Instance, Grid
-from torax._src.geometry.imas import IMASConfig
+from torax._src.geometry.base import GeometryConfigBase
 from ymmsl import Operator
 
 if TYPE_CHECKING:
@@ -71,19 +71,13 @@ class ExtraVarCollection(BaseModel):
 
 
 def get_geometry_config_dict(config: torax.ToraxConfig) -> dict:
-    # only get overlapping keys from given config and IMASConfig
-    # model_fields includes inherited fields (n_rho, hires_factor, ...)
-    imas_config_keys = IMASConfig.model_fields
-    # we can pick a random entry since all fields are time_invariant except hires_fac
-    # (which we can ignore) and equilibrium_object (which we overwrite)
-    if isinstance(config.geometry.geometry_configs, dict):
-        config_dict = list(config.geometry.geometry_configs.values())[0].config.__dict__
-    else:
-        config_dict = config.geometry.geometry_configs.config.__dict__
-    config_dict = {
-        key: value for key, value in config_dict.items() if key in imas_config_keys
+    # geometry fields shared by all geometry types (n_rho, hires_factor, ...)
+    base_keys = set(GeometryConfigBase.model_fields) - {"model_name"}
+    return {
+        key: value
+        for key, value in config.geometry.__dict__.items()
+        if key in base_keys
     }
-    return config_dict
 
 
 @overload
