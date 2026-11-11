@@ -1,4 +1,5 @@
 import copy
+import multiprocessing
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -453,6 +454,8 @@ YMMSL_RESUME_EQUILIBRIUM = YMMSL_RESUME_TEMPLATE.replace("IDS_NAME", "equilibriu
 @pytest.mark.filterwarnings("ignore:.*use of fork():DeprecationWarning")
 def test_checkpoint(tmp_path, monkeypatch, ymmsl_text, ymmsl_resume):
     monkeypatch.chdir(tmp_path)
+    # Forking after JAX has initialised in this process (e.g. by another test) aborts
+    monkeypatch.setattr(libmuscle.runner, "mp", multiprocessing.get_context("spawn"))
 
     filename = "ITERhybrid_COCOS17_IDS_ddv4.nc"
     data_source_path = f"{torax_muscle3.__path__[0]}/tests/data/{filename}"
