@@ -697,7 +697,8 @@ class ToraxMuscleRunner:
                     "EC power needs an equilibrium on equilibrium_in_f/in_s."
                 )
             else:
-                updates["sources.ecrh.P_total"] = 0.0
+                # None, not 0.0: TORAX 2.0 then requires the Gaussian's width/location
+                updates["sources.ecrh.P_total"] = None
                 updates["sources.ecrh.extra_prescribed_power_density"] = (
                     ec_power_density(*ec_power, shape, self.equilibrium_volumes)
                 )
