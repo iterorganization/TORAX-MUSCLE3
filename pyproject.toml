@@ -51,7 +51,7 @@ dependencies = [
     "rich",
     "packaging",
     # "torax>=2",
-    "torax[dev] @ git+https://github.com/mikesndrs/torax.git@5bd01f13acee1a7124083c7c9e60b3f655fea3d4",
+    "torax[dev] @ git+https://github.com/mikesndrs/torax.git@e96465188bf376c257bf4977bd775c710defe439",
     "imas-python",
     "muscle3>=0.10",
 ]
