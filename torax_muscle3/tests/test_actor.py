@@ -1,4 +1,5 @@
 import copy
+import multiprocessing
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -33,6 +34,7 @@ EQUILIBRIUM_DATA_PATH = TESTS_DIR / "data" / "ITERhybrid_COCOS17_IDS_ddv4.nc"
 CORE_SOURCES_DATA_PATH = TESTS_DIR / "data" / "core_sources_ddv4.nc"
 CONFIG_PATH = TESTS_DIR / "basic_config.py"
 SAWTOOTH_CONFIG_PATH = TESTS_DIR / "sawtooth_config.py"
+PSI_CONFIG_PATH = TESTS_DIR / "psi_from_geometry_config.py"
 
 # ---------------------------------------------------------------------------
 # MuscleTester-based tests: drive the real torax actor directly through the
@@ -284,6 +286,59 @@ def test_torax_sawtooth_keeps_announced_timestamps(
     tester.receive("core_profiles_out_f")
 
 
+def psi_rise(core_profiles: IDSToplevel) -> float:
+    """Gauge-free psi measure: psi(rho_norm=0.5) - psi(axis)."""
+    grid = core_profiles.profiles_1d[0].grid
+    return float(np.interp(0.5, grid.rho_tor_norm, grid.psi) - grid.psi[0])
+
+
+@pytest.mark.filterwarnings("ignore:.*use of fork():DeprecationWarning")
+def test_torax_psi_from_equilibrium(muscle3_tester: MuscleTester) -> None:
+    """With psi_source='geometry' and evolve_current=False, psi follows the in_s equilibrium,
+    also when core_profiles are received alongside it."""
+    config = build_config(
+        {
+            "s": ["equilibrium_in_s", "core_profiles_in_s"],
+            "o_i": ["core_profiles_out_i"],
+            "o_f": ["core_profiles_out_f"],
+        },
+        settings={
+            "torax.python_config_module": str(PSI_CONFIG_PATH),
+            "torax.t_final": 0.3,
+        },
+    )
+    tester = muscle3_tester.start_implementation(config, "torax", default_timeout=120)
+
+    reference = load_ids(EQUILIBRIUM_DATA_PATH, "equilibrium")
+    rises = []
+    while True:
+        request = tester.receive("core_profiles_out_i")
+        rises.append(psi_rise(deserialize("core_profiles", request.data)))
+        # current, and with it the geometry psi, doubles after the first reply
+        reply = copy.deepcopy(reference)
+        scale = 1.0 if len(rises) == 1 else 2.0
+        reply.time = [request.timestamp]
+        reply.time_slice[0].profiles_1d.j_phi *= scale
+        reply.time_slice[0].global_quantities.ip *= scale
+        for port, data in (
+            ("equilibrium_in_s", reply.serialize()),
+            ("core_profiles_in_s", request.data),
+        ):
+            tester.send(
+                port,
+                Message(
+                    request.timestamp,
+                    data=data,
+                    next_timestamp=request.next_timestamp,
+                ),
+            )
+        if request.next_timestamp is None:
+            break
+
+    tester.receive("core_profiles_out_f")
+    assert rises[2] / rises[1] == pytest.approx(2.0, rel=0.02)
+
+
 # ---------------------------------------------------------------------------
 # Checkpoint/resume test: exercises MUSCLE3's snapshot/resume mechanics across
 # two separate manager runs. MuscleTester/ImplementationTester has no
@@ -398,6 +453,8 @@ YMMSL_RESUME_EQUILIBRIUM = YMMSL_RESUME_TEMPLATE.replace("IDS_NAME", "equilibriu
 @pytest.mark.filterwarnings("ignore:.*use of fork():DeprecationWarning")
 def test_checkpoint(tmp_path, monkeypatch, ymmsl_text, ymmsl_resume):
     monkeypatch.chdir(tmp_path)
+    # Forking after JAX has initialised in this process (e.g. by another test) aborts
+    monkeypatch.setattr(libmuscle.runner, "mp", multiprocessing.get_context("spawn"))
 
     filename = "ITERhybrid_COCOS17_IDS_ddv4.nc"
     data_source_path = f"{torax_muscle3.__path__[0]}/tests/data/{filename}"
@@ -439,8 +496,8 @@ NO_YMMSL_NUMERICS = {"t_initial": None, "t_final": None, "fixed_dt": None}
 def test_time_window_from_equilibrium():
     """t_range from the received equilibrium sequence sets the window."""
     assert numerics_overrides((1.5, 3.25), NO_YMMSL_NUMERICS) == {
-        "numerics.t_initial": 1.5,
-        "numerics.t_final": 3.25,
+        "time_step_calculator.t_initial": 1.5,
+        "time_step_calculator.t_final": 3.25,
     }
 
 
@@ -448,7 +505,7 @@ def test_ymmsl_numerics_override_equilibrium_window():
     """Explicit ymmsl t_initial/t_final win over the equilibrium-derived range."""
     assert numerics_overrides(
         (1.5, 3.25), {"t_initial": 2.0, "t_final": 4.0, "fixed_dt": None}
-    ) == {"numerics.t_initial": 2.0, "numerics.t_final": 4.0}
+    ) == {"time_step_calculator.t_initial": 2.0, "time_step_calculator.t_final": 4.0}
 
 
 def test_partial_ymmsl_keeps_equilibrium_window():
@@ -456,9 +513,9 @@ def test_partial_ymmsl_keeps_equilibrium_window():
     assert numerics_overrides(
         (1.5, 3.25), {"t_initial": None, "t_final": None, "fixed_dt": 0.05}
     ) == {
-        "numerics.t_initial": 1.5,
-        "numerics.t_final": 3.25,
-        "numerics.fixed_dt": 0.05,
+        "time_step_calculator.t_initial": 1.5,
+        "time_step_calculator.t_final": 3.25,
+        "time_step_calculator.dt": 0.05,
     }
 
 
@@ -502,7 +559,11 @@ def test_ec_power_density():
         deposited = np.trapezoid(np.interp(rho_eq, r, d), scale * rho_eq**2)
         np.testing.assert_allclose(deposited, 1e6 if t == 0.0 else 2e6, rtol=1e-4)
 
-    config["sources"]["ecrh"] = {}
+    config["sources"]["ecrh"] = {
+        "P_total": 1e6,
+        "gaussian_width": 0.1,
+        "gaussian_location": 0.3,
+    }
     assert ec_deposition_shape(torax.ToraxConfig.from_dict(config)) is None
 
 
@@ -525,9 +586,9 @@ def test_inner_geometry_spans_the_step():
     runner = ToraxMuscleRunner.__new__(ToraxMuscleRunner)
     runner.t_cur, runner.t_target = 1.0, 1.1
     configs = runner.stepwise_geometry_configs(a)
-    assert configs == {"1.0": a, "1.1": a} and configs["1.0"] is not a
+    assert configs == {1.0: a, 1.1: a} and configs[1.0] is not a
     runner.t_cur, runner.t_target = 1.1, 1.2
     configs = runner.stepwise_geometry_configs(b)
-    assert configs == {"1.1": a, "1.2": b} and configs["1.1"] is not a
+    assert configs == {1.1: a, 1.2: b} and configs[1.1] is not a
     runner.t_target = 1.1
-    assert runner.stepwise_geometry_configs(c) == {"1.1": c}
+    assert runner.stepwise_geometry_configs(c) == {1.1: c}

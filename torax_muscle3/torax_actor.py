@@ -21,7 +21,6 @@ from imas import DBEntry, IDSFactory
 from imas.ids_defs import CLOSEST_INTERP
 from imas.ids_toplevel import IDSToplevel
 from libmuscle import Instance, InstanceFlags, Message
-from torax import experimental as torax_experimental
 from torax import (
     build_torax_config_from_file,
     PostProcessedOutputs,
@@ -35,12 +34,7 @@ from torax.experimental import (
     SimState,
     SimulationStepFn,
 )
-from torax._src.config.build_runtime_params import (
-    get_consistent_runtime_params_and_geometry,
-)
-from torax._src.geometry import geometry
-from torax._src.geometry.imas import IMASConfig
-from torax._src.geometry.pydantic_model import GeometryConfig
+from torax._src.geometry.imas import IMASSliceData, extract_slice_data
 from torax._src.imas_tools.input.core_sources import sources_from_IMAS
 from torax._src.imas_tools.input.core_profiles import (
     profile_conditions_from_IMAS,
@@ -66,6 +60,12 @@ logger = logging.getLogger()
 
 #: time [s] within which a step counts as having reached its announced t_target
 T_TARGET_TOLERANCE = 1e-9
+
+#: ymmsl numerics settings -> TORAX time_step_calculator fields
+TIME_STEP_FIELDS = {"t_initial": "t_initial", "t_final": "t_final", "fixed_dt": "dt"}
+
+#: profile_conditions source choices are owned by the TORAX config, not core_profiles
+CONFIG_OWNED_PROFILE_CONDITIONS = ("I_p_source", "psi_source")
 
 
 def ec_power_from_imas(
@@ -93,8 +93,11 @@ def ec_deposition_shape(
     torax_config: ToraxConfig,
 ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
     """(rho_norm, profile) of the configured ecrh extra_prescribed_power_density, the
-    largest of its time entries; None if it is zero everywhere."""
-    entries = torax_config.sources.ecrh.extra_prescribed_power_density.value.values()
+    largest of its time entries; None if it is unset or zero everywhere."""
+    prescribed = torax_config.sources.ecrh.extra_prescribed_power_density
+    if prescribed is None:
+        return None
+    entries = prescribed.value.values()
     rho, profile = max(entries, key=lambda entry: np.sum(np.abs(entry[1])))
     if not np.any(profile):
         return None
@@ -121,16 +124,23 @@ def numerics_overrides(
     equilibrium_t_range: Optional[Tuple[float, float]],
     explicit_numerics: dict,
 ) -> dict:
-    """numerics.* overrides for update_fields, lowest precedence first.
+    """time_step_calculator.* overrides for update_fields, lowest precedence first.
 
     The equilibrium window is applied first and explicit ymmsl numerics last, so
     a ymmsl setting wins key-by-key over the equilibrium-derived t_initial/t_final.
     """
     fields: dict = {}
     if equilibrium_t_range is not None:
-        fields["numerics.t_initial"], fields["numerics.t_final"] = equilibrium_t_range
+        (
+            fields["time_step_calculator.t_initial"],
+            fields["time_step_calculator.t_final"],
+        ) = equilibrium_t_range
     fields.update(
-        {f"numerics.{k}": v for k, v in explicit_numerics.items() if v is not None}
+        {
+            f"time_step_calculator.{TIME_STEP_FIELDS[k]}": v
+            for k, v in explicit_numerics.items()
+            if v is not None
+        }
     )
     return fields
 
@@ -189,8 +199,6 @@ class ToraxMuscleRunner:
     """ToraxConfig object"""
     step_fn: SimulationStepFn
     """Torax step_function object"""
-    geometry_provider: torax_experimental.geometry.StandardGeometryProvider
-    """Torax geometry_provider object"""
     runtime_params_provider: RuntimeParamsProvider
     """Torax runtime_params_provider object"""
     sim_state: SimState
@@ -213,7 +221,7 @@ class ToraxMuscleRunner:
     """Whether the run_sim function has been run fully"""
     last_communication: float = -np.inf
     """Last timestamp for which the MUSCLE3 communication was done"""
-    last_inner_geometry: Optional[GeometryConfig] = None
+    last_inner_geometry: Optional[IMASSliceData] = None
     """Geometry of the last equilibrium slice received on in_s"""
     equilibrium_t_range: Optional[Tuple[float, float]] = None
     """(t_initial, t_final) taken from the equilibrium sequence received on in_f,
@@ -306,7 +314,6 @@ class ToraxMuscleRunner:
         self.sim_state, self.post_processed_outputs = (
             get_initial_state_and_post_processed_outputs(
                 step_fn=self.step_fn,
-                geometry_overrides=self.geometry_provider,
                 runtime_params_overrides=self.runtime_params_provider,
             )
         )
@@ -386,7 +393,6 @@ class ToraxMuscleRunner:
         else:
             self.torax_config = torax_config
         self.fix_ymmsl_settings()
-        self.geometry_provider = self.torax_config.geometry.build_provider
         self.runtime_params_provider = RuntimeParamsProvider.from_config(
             self.torax_config
         )
@@ -412,8 +418,8 @@ class ToraxMuscleRunner:
                 )
                 logger.info(
                     "TORAX time window: [%g, %g] s",
-                    self.torax_config.numerics.t_initial,
-                    self.torax_config.numerics.t_final,
+                    self.torax_config.time_step_calculator.t_initial,
+                    self.torax_config.time_step_calculator.t_final,
                 )
                 self.runtime_params_provider = RuntimeParamsProvider.from_config(
                     self.torax_config
@@ -422,11 +428,12 @@ class ToraxMuscleRunner:
             self.sim_state, self.post_processed_outputs = (
                 get_initial_state_and_post_processed_outputs(
                     step_fn=self.step_fn,
-                    geometry_overrides=self.geometry_provider,
                     runtime_params_overrides=self.runtime_params_provider,
                 )
             )
-            self.t_final = self.step_fn.runtime_params_provider.numerics.t_final
+            self.t_final = (
+                self.step_fn.runtime_params_provider.time_step_calculator.t_final
+            )
         self.t_cur = self.sim_state.t
         self.first_run = False
         self.last_communication = -np.inf
@@ -490,7 +497,6 @@ class ToraxMuscleRunner:
             self.sim_state,
             self.post_processed_outputs,
             max_dt=max_dt,
-            geo_overrides=self.geometry_provider,
             runtime_params_overrides=self.runtime_params_provider,
         )
         self.t_cur = self.sim_state.t
@@ -553,10 +559,9 @@ class ToraxMuscleRunner:
             return
         equilibrium_data, _ = ids_data
 
-        geometry_configs = {}
+        slices: dict[float, IMASSliceData] = {}
         self.equilibrium_volumes = []
-        torax_config_dict = get_geometry_config_dict(self.torax_config)
-        torax_config_dict["geometry_type"] = "imas"
+        geometry_config_dict = get_geometry_config_dict(self.torax_config)
         light_equilibrium = create_light_equilibrium(equilibrium_data)
         if port_name == "in_f" and len(light_equilibrium.time):
             self.equilibrium_t_range = (
@@ -573,16 +578,12 @@ class ToraxMuscleRunner:
                 )
                 if my_slice.code.output_flag and my_slice.code.output_flag[0] == -1:
                     continue
-                config_kwargs = {
-                    **torax_config_dict,
-                    "equilibrium_object": my_slice,
-                    "imas_uri": None,
-                    "imas_filepath": None,
-                    "Ip_from_parameters": False,
-                }
-                imas_cfg = IMASConfig(**config_kwargs)
-                cfg = GeometryConfig(config=imas_cfg)
-                geometry_configs[str(t)] = cfg
+                slices[float(t)] = extract_slice_data(
+                    my_slice,
+                    trapped_fraction_source=geometry_config_dict[
+                        "trapped_fraction_source"
+                    ],
+                )
                 profiles_1d = my_slice.time_slice[0].profiles_1d
                 self.equilibrium_volumes.append(
                     (
@@ -604,31 +605,30 @@ class ToraxMuscleRunner:
                 )
         # temp extra vars code
         self.extra_var_col.pad_extra_vars()
-        if port_name == "in_s" and len(geometry_configs) == 1:
-            geometry_configs = self.stepwise_geometry_configs(
-                next(iter(geometry_configs.values()))
-            )
-
-        # self.geometry_provider = torax_experimental.geometry.Geometry.from_dict(
-        #     {
-        #         "geometry_type": geometry.GeometryType.IMAS,
-        #         "geometry_configs": geometry_configs,
-        #     }
-        # ).build_provider
+        if not slices:
+            return
+        if port_name == "in_s" and len(slices) == 1:
+            slices = self.stepwise_geometry_configs(next(iter(slices.values())))
 
         self.torax_config.update_fields(
             {
                 "geometry": {
-                    "geometry_type": geometry.GeometryType.IMAS,
-                    "geometry_configs": geometry_configs,
-                }
+                    **geometry_config_dict,
+                    "model_name": "imas",
+                    "imas_data": slices,
+                },
+                # I_p is taken from the received equilibrium
+                "profile_conditions.I_p_source": "geometry",
             }
         )
-        self.geometry_provider = self.torax_config.geometry.build_provider
+        # the geometry is part of the runtime params since TORAX 2.0
+        self.runtime_params_provider = RuntimeParamsProvider.from_config(
+            self.torax_config
+        )
 
     def stepwise_geometry_configs(
-        self, new_geometry: GeometryConfig
-    ) -> dict[str, GeometryConfig]:
+        self, new_geometry: IMASSliceData
+    ) -> dict[float, IMASSliceData]:
         """Key the previous in_s slice at t_cur and the new one at t_target, so TORAX
         sees the geometry change during the step instead of a jump between steps."""
         # a copy: TORAX's config tree rejects the same object appearing twice
@@ -637,8 +637,8 @@ class ToraxMuscleRunner:
         t_cur = float(self.t_cur)
         t_target = float(getattr(self, "t_target", t_cur))
         if t_target <= t_cur:
-            return {str(t_cur): new_geometry}
-        return {str(t_cur): previous, str(t_target): new_geometry}
+            return {t_cur: new_geometry}
+        return {t_cur: previous, t_target: new_geometry}
 
     def receive_core_profiles(self, port_name: str) -> None:
         """Receive core_profiles IDS through MUSCLE3 connections"""
@@ -656,8 +656,17 @@ class ToraxMuscleRunner:
             self.torax_config.update_fields({"plasma_composition": plasma_composition})
 
         core_profiles_conditions = profile_conditions_from_IMAS(core_profiles_data)
+        skipped = set(CONFIG_OWNED_PROFILE_CONDITIONS)
+        if self.torax_config.profile_conditions.psi_source != "profile_conditions":
+            # TORAX rejects a psi profile when psi comes from elsewhere
+            skipped.add("psi")
+        # per key, so the config's other profile_conditions (e.g. psi sources) survive
         self.torax_config.update_fields(
-            {"profile_conditions": core_profiles_conditions}
+            {
+                f"profile_conditions.{key}": value
+                for key, value in core_profiles_conditions.items()
+                if key not in skipped
+            }
         )
         self.runtime_params_provider = RuntimeParamsProvider.from_config(
             self.torax_config
@@ -688,7 +697,8 @@ class ToraxMuscleRunner:
                     "EC power needs an equilibrium on equilibrium_in_f/in_s."
                 )
             else:
-                updates["sources.ecrh.P_total"] = 0.0
+                # None, not 0.0: TORAX 2.0 then requires the Gaussian's width/location
+                updates["sources.ecrh.P_total"] = None
                 updates["sources.ecrh.extra_prescribed_power_density"] = (
                     ec_power_density(*ec_power, shape, self.equilibrium_volumes)
                 )
@@ -755,14 +765,9 @@ class ToraxMuscleRunner:
 
     def get_t_next(self) -> float:
         """Calculate the expected timestamp of the step about to be taken."""
-        runtime_params_t, geo_t = get_consistent_runtime_params_and_geometry(
-            t=self.sim_state.t,
-            runtime_params_provider=self.runtime_params_provider,
-            geometry_provider=self.geometry_provider,
-            core_profiles=self.sim_state.core_profiles,
-        )
+        runtime_params_t = self.runtime_params_provider(self.sim_state.t)
         dt = self.step_fn.time_step_calculator.next_dt(
-            runtime_params_t,
+            runtime_params_t.time_step_calculator,
             self.sim_state,
         )
         return self.sim_state.t + dt
@@ -775,7 +780,7 @@ class ToraxMuscleRunner:
             self.t_next_inner = t_next
 
     def fix_ymmsl_settings(self) -> None:
-        # ymmsl numerics overrides only; sets the base config before any equilibrium
+        # ymmsl time-step overrides only; sets the base config before any equilibrium
         self.torax_config.update_fields(
             numerics_overrides(None, self.settings.explicit_numerics)
         )
