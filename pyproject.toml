@@ -50,7 +50,8 @@ dependencies = [
     "importlib_resources",
     "rich",
     "packaging",
-    "torax[dev]==2.0.0",
+    # "torax>=2",
+    "torax[dev] @ git+https://github.com/mikesndrs/torax.git@5bd01f13acee1a7124083c7c9e60b3f655fea3d4",
     "imas-python",
     "muscle3>=0.10",
 ]
