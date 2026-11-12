@@ -559,7 +559,11 @@ def test_ec_power_density():
         deposited = np.trapezoid(np.interp(rho_eq, r, d), scale * rho_eq**2)
         np.testing.assert_allclose(deposited, 1e6 if t == 0.0 else 2e6, rtol=1e-4)
 
-    config["sources"]["ecrh"] = {}
+    config["sources"]["ecrh"] = {
+        "P_total": 1e6,
+        "gaussian_width": 0.1,
+        "gaussian_location": 0.3,
+    }
     assert ec_deposition_shape(torax.ToraxConfig.from_dict(config)) is None
 
 

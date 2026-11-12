@@ -93,8 +93,11 @@ def ec_deposition_shape(
     torax_config: ToraxConfig,
 ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
     """(rho_norm, profile) of the configured ecrh extra_prescribed_power_density, the
-    largest of its time entries; None if it is zero everywhere."""
-    entries = torax_config.sources.ecrh.extra_prescribed_power_density.value.values()
+    largest of its time entries; None if it is unset or zero everywhere."""
+    prescribed = torax_config.sources.ecrh.extra_prescribed_power_density
+    if prescribed is None:
+        return None
+    entries = prescribed.value.values()
     rho, profile = max(entries, key=lambda entry: np.sum(np.abs(entry[1])))
     if not np.any(profile):
         return None
