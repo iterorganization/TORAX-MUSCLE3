@@ -655,6 +655,10 @@ class ToraxMuscleRunner:
             )
             self.torax_config.update_fields({"plasma_composition": plasma_composition})
 
+        # A single slice is constant in time so value does not matter.
+        # A fixed time key avoids a JAX retrace per step.
+        if len(core_profiles_data.profiles_1d) == 1:
+            core_profiles_data.profiles_1d[0].time = 0.0
         core_profiles_conditions = profile_conditions_from_IMAS(core_profiles_data)
         self.torax_config.update_fields(
             {"profile_conditions": core_profiles_conditions}
