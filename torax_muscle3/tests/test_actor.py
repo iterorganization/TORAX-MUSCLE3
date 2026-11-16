@@ -19,6 +19,7 @@ from libmuscle.pytest import MuscleTester
 import torax_muscle3
 from torax_muscle3.torax_actor import main as torax_actor
 from torax_muscle3.tests.basic_config import CONFIG as BASIC_CONFIG
+from torax_muscle3.tests.conftest import DD_VERSION
 from torax_muscle3.torax_actor import (
     ToraxMuscleRunner,
     ec_deposition_shape,
@@ -77,13 +78,13 @@ def build_config(
 
 def load_ids(data_path: Path, ids_name: str) -> IDSToplevel:
     """Load an IDS from a test data file."""
-    with imas.DBEntry(uri=str(data_path), mode="r") as db:
+    with imas.DBEntry(uri=str(data_path), mode="r", dd_version=DD_VERSION) as db:
         return db.get(ids_name=ids_name)
 
 
 def deserialize(ids_name: str, data: bytes) -> IDSToplevel:
     """Deserialize a MUSCLE3 message payload into an IDS."""
-    ids = getattr(imas.IDSFactory(), ids_name)()
+    ids = getattr(imas.IDSFactory(DD_VERSION), ids_name)()
     ids.deserialize(data)
     return ids
 
@@ -180,7 +181,7 @@ def test_torax_reply_equilibrium(muscle3_tester: MuscleTester) -> None:
     )
     tester = muscle3_tester.start_implementation(config, "torax", default_timeout=120)
 
-    with imas.DBEntry("imas:memory?path=/", "w") as reference_db:
+    with imas.DBEntry("imas:memory?path=/", "w", dd_version=DD_VERSION) as reference_db:
         reference_db.put(load_ids(EQUILIBRIUM_DATA_PATH, "equilibrium"))
 
         while True:
@@ -297,7 +298,7 @@ def source_for_tests():
     instance = libmuscle.Instance(flags=libmuscle.InstanceFlags.USES_CHECKPOINT_API)
     ports = instance.list_ports()[ymmsl.Operator.O_F]
     imas_filepath = instance.get_setting("imas_source")
-    with imas.DBEntry(uri=imas_filepath, mode="r") as db:
+    with imas.DBEntry(uri=imas_filepath, mode="r", dd_version=DD_VERSION) as db:
         while instance.reuse_instance():
             if instance.resuming():
                 pass
@@ -320,7 +321,7 @@ def sink_for_tests():
     instance = libmuscle.Instance(flags=libmuscle.InstanceFlags.USES_CHECKPOINT_API)
     ports = instance.list_ports()[ymmsl.Operator.F_INIT]
     data_sink_path = instance.get_setting("imas_sink")
-    with imas.DBEntry(uri=data_sink_path, mode="w") as db:
+    with imas.DBEntry(uri=data_sink_path, mode="w", dd_version=DD_VERSION) as db:
         while instance.reuse_instance():
             if instance.resuming():
                 pass
@@ -329,7 +330,7 @@ def sink_for_tests():
             for port in ports:
                 ids_name = port.replace("_in", "")
                 msg_in = instance.receive(port)
-                ids_data = getattr(imas.IDSFactory(), ids_name)()
+                ids_data = getattr(imas.IDSFactory(DD_VERSION), ids_name)()
                 ids_data.deserialize(msg_in.data)
                 db.put(ids_data)
             if instance.should_save_final_snapshot():
@@ -464,7 +465,7 @@ def test_partial_ymmsl_keeps_equilibrium_window():
 
 def test_ec_power_from_imas():
     """A power-only 'ec' source is read as (time, power); one with profiles is not."""
-    ids = imas.IDSFactory("4.0.0").core_sources()
+    ids = imas.IDSFactory(DD_VERSION).core_sources()
     ids.ids_properties.homogeneous_time = 1
     ids.time = [0.0, 1.0]
     ids.source.resize(2)
