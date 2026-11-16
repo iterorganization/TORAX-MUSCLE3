@@ -21,4 +21,4 @@ jobs:
     ## TODO: enable when imas-core is publicly available
     - name: pytest
       run: |
-        pytest --disable-warnings
+        pytest --disable-warnings -n auto --maxprocesses 4

@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 
 import imas
 import libmuscle
+import numpy as np
 import pydantic
 import pytest
 import torax
@@ -18,7 +19,14 @@ from libmuscle.pytest import MuscleTester
 import torax_muscle3
 from torax_muscle3.torax_actor import main as torax_actor
 from torax_muscle3.tests.basic_config import CONFIG as BASIC_CONFIG
-from torax_muscle3.torax_actor import ToraxMuscleRunner, numerics_overrides
+from torax_muscle3.tests.conftest import DD_VERSION
+from torax_muscle3.torax_actor import (
+    ToraxMuscleRunner,
+    ec_deposition_shape,
+    ec_power_density,
+    ec_power_from_imas,
+    numerics_overrides,
+)
 from torax_muscle3.utils import get_geometry_config_dict
 
 TESTS_DIR = Path(torax_muscle3.__path__[0]) / "tests"
@@ -70,13 +78,13 @@ def build_config(
 
 def load_ids(data_path: Path, ids_name: str) -> IDSToplevel:
     """Load an IDS from a test data file."""
-    with imas.DBEntry(uri=str(data_path), mode="r") as db:
+    with imas.DBEntry(uri=str(data_path), mode="r", dd_version=DD_VERSION) as db:
         return db.get(ids_name=ids_name)
 
 
 def deserialize(ids_name: str, data: bytes) -> IDSToplevel:
     """Deserialize a MUSCLE3 message payload into an IDS."""
-    ids = getattr(imas.IDSFactory(), ids_name)()
+    ids = getattr(imas.IDSFactory(DD_VERSION), ids_name)()
     ids.deserialize(data)
     return ids
 
@@ -173,7 +181,7 @@ def test_torax_reply_equilibrium(muscle3_tester: MuscleTester) -> None:
     )
     tester = muscle3_tester.start_implementation(config, "torax", default_timeout=120)
 
-    with imas.DBEntry("imas:memory?path=/", "w") as reference_db:
+    with imas.DBEntry("imas:memory?path=/", "w", dd_version=DD_VERSION) as reference_db:
         reference_db.put(load_ids(EQUILIBRIUM_DATA_PATH, "equilibrium"))
 
         while True:
@@ -290,7 +298,7 @@ def source_for_tests():
     instance = libmuscle.Instance(flags=libmuscle.InstanceFlags.USES_CHECKPOINT_API)
     ports = instance.list_ports()[ymmsl.Operator.O_F]
     imas_filepath = instance.get_setting("imas_source")
-    with imas.DBEntry(uri=imas_filepath, mode="r") as db:
+    with imas.DBEntry(uri=imas_filepath, mode="r", dd_version=DD_VERSION) as db:
         while instance.reuse_instance():
             if instance.resuming():
                 pass
@@ -313,7 +321,7 @@ def sink_for_tests():
     instance = libmuscle.Instance(flags=libmuscle.InstanceFlags.USES_CHECKPOINT_API)
     ports = instance.list_ports()[ymmsl.Operator.F_INIT]
     data_sink_path = instance.get_setting("imas_sink")
-    with imas.DBEntry(uri=data_sink_path, mode="w") as db:
+    with imas.DBEntry(uri=data_sink_path, mode="w", dd_version=DD_VERSION) as db:
         while instance.reuse_instance():
             if instance.resuming():
                 pass
@@ -322,7 +330,7 @@ def sink_for_tests():
             for port in ports:
                 ids_name = port.replace("_in", "")
                 msg_in = instance.receive(port)
-                ids_data = getattr(imas.IDSFactory(), ids_name)()
+                ids_data = getattr(imas.IDSFactory(DD_VERSION), ids_name)()
                 ids_data.deserialize(msg_in.data)
                 db.put(ids_data)
             if instance.should_save_final_snapshot():
@@ -453,6 +461,50 @@ def test_partial_ymmsl_keeps_equilibrium_window():
         "numerics.t_final": 3.25,
         "numerics.fixed_dt": 0.05,
     }
+
+
+def test_ec_power_from_imas():
+    """A power-only 'ec' source is read as (time, power); one with profiles is not."""
+    ids = imas.IDSFactory(DD_VERSION).core_sources()
+    ids.ids_properties.homogeneous_time = 1
+    ids.time = [0.0, 1.0]
+    ids.source.resize(2)
+    ids.source[0].identifier.name = "ec"
+    ids.source[0].global_quantities.resize(2)
+    for q, p in zip(ids.source[0].global_quantities, [1e6, 2e6]):
+        q.power = p
+    ids.source[1].identifier.name = "ec"
+    ids.source[1].profiles_1d.resize(1)
+    time, power = ec_power_from_imas(ids)
+    assert list(time) == [0.0, 1.0]
+    assert list(power) == [1e6, 2e6]
+
+
+def test_ec_power_density():
+    """The configured ecrh shape is scaled to deposit the received power in each
+    equilibrium's volume, interpolated in time between equilibrium slices."""
+    config = copy.deepcopy(BASIC_CONFIG)
+    rho = np.linspace(0, 1, 201)
+    profile = 1 - rho**2
+    config.setdefault("sources", {})["ecrh"] = {
+        "extra_prescribed_power_density": {0.0: (rho, profile)}
+    }
+    shape = ec_deposition_shape(torax.ToraxConfig.from_dict(config))
+    assert shape is not None
+    np.testing.assert_array_equal(shape[1], profile)
+
+    rho_eq = np.linspace(0, 1, 101)
+    volumes = [(0.0, rho_eq, 100 * rho_eq**2), (2.0, rho_eq, 300 * rho_eq**2)]
+    density = ec_power_density(
+        np.array([0.0, 1.0, 2.0]), np.array([1e6, 2e6, 2e6]), shape, volumes
+    )
+    for t, scale in [(0.0, 100), (1.0, 200), (2.0, 300)]:
+        r, d = density[t]
+        deposited = np.trapezoid(np.interp(rho_eq, r, d), scale * rho_eq**2)
+        np.testing.assert_allclose(deposited, 1e6 if t == 0.0 else 2e6, rtol=1e-4)
+
+    config["sources"]["ecrh"] = {}
+    assert ec_deposition_shape(torax.ToraxConfig.from_dict(config)) is None
 
 
 def test_geometry_config_keeps_inherited_fields():
