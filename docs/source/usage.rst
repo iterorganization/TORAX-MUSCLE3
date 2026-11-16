@@ -104,7 +104,7 @@ A received equilibrium sets TORAX's geometry and its plasma current
 ``profile_conditions`` key by key, but never the ``I_p_source`` /
 ``psi_source`` choices, which stay as set in the TORAX config.
 
-To let the equilibrium code own psi (e.g. NICE evolutive with resistive
+To let the equilibrium code control psi (e.g. NICE evolutive with resistive
 diffusion), set in the TORAX config::
 
    "numerics": {"evolve_current": False},
