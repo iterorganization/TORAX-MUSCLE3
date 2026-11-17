@@ -15,4 +15,8 @@ CONFIG["mhd"] = {
         "redistribution_model": {"model_name": "simple"},
     }
 }
-CONFIG["time_step_calculator"] = {"calculator_type": "fixed"}
+CONFIG["time_step_calculator"] = {
+    **CONFIG["time_step_calculator"],
+    "calculator_type": "fixed",
+    "dt": 0.1,
+}
